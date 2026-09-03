@@ -69,5 +69,7 @@ O sistema calcula e armazena a Capacidade de Água Disponível (CAD) do talhão 
 
 ## Assumptions
 
-- A fórmula oficial de cálculo da CAD ($CAD = (CC - PMP) \times \rho_s \times z$) e os limiares de classificação de textura já estão definidos em `escopo/calculos-geo-metero.md` e no `requisitos/REQUISITOS.md` (RN020) — esta spec não redefine a fórmula, apenas o comportamento do sistema ao aplicá-la.
+- A fórmula oficial de cálculo da CAD ($CAD = (CC - PMP) \times \rho_s \times z$) já está definida em `escopo/calculos-geo-metero.md` e no `requisitos/REQUISITOS.md` (RN020) — esta spec não redefine a fórmula, apenas o comportamento do sistema ao aplicá-la.
 - A profundidade de raízes ($z$) usada no cálculo assume um valor padrão razoável para a fase inicial da cultura quando não informado explicitamente pelo usuário.
+- **CC e PMP não são retornados diretamente pelo SoilGrids** (só textura, matéria orgânica e densidade) — são estimados via função de pedotransferência (Saxton & Rawls, 1986) a partir desses dados. É uma estimativa científica estabelecida, mas **recomenda-se validação com um agrônomo/pedólogo** antes de usar o CAD resultante em decisões reais de plantio, especialmente antes que o Balanço Hídrico (feature 010) rode com dados de campo reais para calibração.
+- Os limiares de classificação de textura (`ARGILOSO`/`ARENOSO`/`MISTO`) usam os pontos de corte reais do triângulo textural USDA para as classes "clay"/"sand", mas não implementam a geometria completa das 12 classes — decisão de simplicidade (ver research.md), sem mudar o resultado de negócio de 3 categorias.

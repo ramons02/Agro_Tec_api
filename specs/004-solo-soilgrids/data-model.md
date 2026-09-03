@@ -13,4 +13,10 @@
 
 ## Fórmula (referência, não redefinida aqui)
 
-$CAD = (CC - PMP) \times \rho_s \times z$ — CC/PMP em % de retenção obtidos do SoilGrids, $\rho_s$ em g/cm³, $z$ = profundidade de raízes em mm (ver research.md para o valor padrão assumido).
+$CAD = (CC - PMP) \times \rho_s \times z$ — $\rho_s$ em g/cm³, $z$ = profundidade de raízes em mm (ver research.md para o valor padrão assumido).
+
+**Correção em relação à primeira versão desta spec**: CC (Capacidade de Campo) e PMP (Ponto de
+Murcha Permanente) **não** são retornados diretamente pelo SoilGrids — a API v2.0 só fornece
+textura (argila/areia/silte), matéria orgânica e densidade aparente. CC e PMP são *estimados* a
+partir desses dados via função de pedotransferência de Saxton & Rawls (1986), implementada em
+`app/core/calculos/solo.py::estimar_cc_pmp`. Ver Assumptions abaixo.

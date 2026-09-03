@@ -1,15 +1,25 @@
 import json
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints import talhoes as talhoes_endpoint
 from app.core.security import UsuarioAutenticado, get_current_user, hash_senha
 from app.db.models.usuario import Papel, Usuario
 from app.db.session import get_db
 from app.main import app
 from tests.integration.conftest import limpar_tabelas
+
+
+@pytest.fixture(autouse=True)
+def sem_chamada_real_ao_soilgrids(monkeypatch):
+    """Estes testes cobrem CRUD/geometria (feature 005), não a parametrização de
+    solo (feature 004) — evita depender de rede real/lenta a cada talhão criado.
+    Simula "sem cobertura" (None), um cenário válido por si (FR-006)."""
+    monkeypatch.setattr(talhoes_endpoint, "parametrizar_solo", AsyncMock(return_value=None))
 
 # Fazenda Boa Esperança + "Talhão Norte", mesmo cenário de referência do protótipo.
 TALHAO_NORTE = {

@@ -8,11 +8,11 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Adicionar dependência `httpx` (já presente desde a feature 002/003) — nenhuma nova lib necessária
+- [X] T001 [P] Adicionar dependência `httpx` (já presente desde a feature 002/003) — nenhuma nova lib necessária
 
 ## Phase 2: Foundational
 
-- [ ] T002 Adicionar colunas de solo (`tipo_solo`, `fracao_argila_pct`, `fracao_areia_pct`, `fracao_silte_pct`, `materia_organica_pct`, `capacidade_agua_disponivel_mm`) ao modelo `Talhao` (`app/db/models/talhao.py`) e migração Alembic correspondente
+- [X] T002 Adicionar colunas de solo (`tipo_solo`, `fracao_argila_pct`, `fracao_areia_pct`, `fracao_silte_pct`, `materia_organica_pct`, `capacidade_agua_disponivel_mm`) ao modelo `Talhao` (`app/db/models/talhao.py`) e migração Alembic correspondente
 
 **Checkpoint**: schema de talhão pronto para receber os dados de solo.
 
@@ -26,9 +26,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T003 [P] [US1] Implementar `app/services/soilgrids_service.py`: cliente `httpx` assíncrono para a API SoilGrids, extraindo argila/areia/silte/matéria orgânica
-- [ ] T004 [US1] Implementar `classificar_textura(argila, areia, silte)` em `app/core/calculos/solo.py` (função pura, triângulo textural padrão)
-- [ ] T005 [US1] Integrar `soilgrids_service` + `classificar_textura` ao fluxo de criação de talhão (feature 005): ao criar/atualizar geometria, disparar a parametrização
+- [X] T003 [P] [US1] Implementar `app/services/soilgrids_service.py`: cliente `httpx` assíncrono para a API SoilGrids, extraindo argila/areia/silte/matéria orgânica
+- [X] T004 [US1] Implementar `classificar_textura(argila, areia, silte)` em `app/core/calculos/solo.py` (função pura, triângulo textural padrão)
+- [X] T005 [US1] Integrar `soilgrids_service` + `classificar_textura` ao fluxo de criação de talhão (feature 005): ao criar/atualizar geometria, disparar a parametrização
 
 **Checkpoint**: talhão novo recebe `tipo_solo` automaticamente.
 
@@ -42,9 +42,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T006 [P] [US2] Implementar `calcular_cad(cc, pmp, densidade_solo, profundidade_mm)` em `app/core/calculos/solo.py` (função pura, fórmula RN020)
-- [ ] T007 [US2] Usar profundidade padrão de 200mm (ver research.md, exemplo oficial de `calculos-geo-metero.md` §4A) quando não informada
-- [ ] T008 [US2] Persistir `capacidade_agua_disponivel_mm` no talhão junto com a classificação de textura (mesma transação do T005)
+- [X] T006 [P] [US2] Implementar `calcular_cad(cc, pmp, densidade_solo, profundidade_mm)` em `app/core/calculos/solo.py` (função pura, fórmula RN020)
+- [X] T007 [US2] Usar profundidade padrão de 200mm (ver research.md, exemplo oficial de `calculos-geo-metero.md` §4A) quando não informada
+- [X] T008 [US2] Persistir `capacidade_agua_disponivel_mm` no talhão junto com a classificação de textura (mesma transação do T005)
 
 **Checkpoint**: talhão criado já possui tipo de solo e CAD, prontos para o Balanço Hídrico (feature 010).
 
@@ -52,9 +52,9 @@
 
 ## Phase Final: Polish
 
-- [ ] T009 [P] Tratar ausência de cobertura do SoilGrids: talhão salvo com campos de solo nulos, sem bloquear o cadastro (FR-006)
-- [ ] T010 [P] Escrever testes unitários de `classificar_textura` e `calcular_cad` com casos de fronteira em `tests/unit/test_calculos_solo.py`
-- [ ] T011 Rodar os 2 cenários de `quickstart.md`
+- [X] T009 [P] Tratar ausência de cobertura do SoilGrids: talhão salvo com campos de solo nulos, sem bloquear o cadastro (FR-006)
+- [X] T010 [P] Escrever testes unitários de `classificar_textura` e `calcular_cad` com casos de fronteira em `tests/unit/test_calculos_solo.py`
+- [X] T011 Rodar os 2 cenários de `quickstart.md`
 
 ## Dependencies & Execution Order
 

@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from typing import Annotated, Any
 
@@ -11,12 +12,16 @@ from shapely.geometry import shape
 from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.calculos.solo import calcular_cad, classificar_textura, estimar_cc_pmp
 from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
 from app.core.response import AppError, envelope_sucesso
 from app.core.security import UsuarioAutenticado, get_current_user
-from app.db.models.talhao import Talhao
+from app.db.models.talhao import Talhao, TipoSolo
 from app.db.session import get_db
 from app.services.importacao_geo_service import ArquivoGeoInvalidoError, extrair_primeiro_poligono
+from app.services.soilgrids_service import FonteSoloIndisponivelError, parametrizar_solo
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/talhoes", tags=["talhoes"])
 
@@ -37,6 +42,8 @@ class TalhaoRead(BaseModel):
     nome: str
     geometria: dict[str, Any]
     area_ha: float
+    tipo_solo: TipoSolo | None = None
+    capacidade_agua_disponivel_mm: float | None = None
     aviso: str | None = None
 
 
@@ -48,7 +55,44 @@ async def _serializar(db: AsyncSession, talhao: Talhao, aviso: str | None = None
         nome=talhao.nome,
         geometria=json.loads(resultado.scalar_one()),
         area_ha=float(talhao.area_ha),
+        tipo_solo=talhao.tipo_solo,
+        capacidade_agua_disponivel_mm=(
+            float(talhao.capacidade_agua_disponivel_mm)
+            if talhao.capacidade_agua_disponivel_mm is not None
+            else None
+        ),
         aviso=aviso,
+    )
+
+
+async def _parametrizar_solo_do_talhao(talhao: Talhao, poligono) -> None:
+    """FR-001-FR-004 (feature 004) — classifica textura e calcula CAD a partir do
+    centroide do talhão; nunca bloqueia o cadastro se a fonte falhar (FR-006/T009)."""
+    centroide = poligono.centroid
+    try:
+        perfil = await parametrizar_solo(centroide.y, centroide.x)
+    except FonteSoloIndisponivelError:
+        logger.warning("SoilGrids indisponível para talhão %s — solo fica nulo", talhao.id)
+        return
+
+    if perfil is None:
+        return  # sem cobertura para a coordenada — talhão salvo com campos de solo nulos
+
+    talhao.tipo_solo = classificar_textura(
+        perfil.fracao_argila_pct, perfil.fracao_areia_pct, perfil.fracao_silte_pct
+    )
+    talhao.fracao_argila_pct = perfil.fracao_argila_pct
+    talhao.fracao_areia_pct = perfil.fracao_areia_pct
+    talhao.fracao_silte_pct = perfil.fracao_silte_pct
+    talhao.materia_organica_pct = perfil.materia_organica_pct
+
+    capacidade_campo_pct, ponto_murcha_pct = estimar_cc_pmp(
+        perfil.fracao_argila_pct, perfil.fracao_areia_pct, perfil.materia_organica_pct
+    )
+    talhao.capacidade_agua_disponivel_mm = calcular_cad(
+        capacidade_campo_pct=capacidade_campo_pct,
+        ponto_murcha_permanente_pct=ponto_murcha_pct,
+        densidade_solo_g_cm3=perfil.densidade_solo_g_cm3,
     )
 
 
@@ -134,6 +178,10 @@ async def _criar_talhao_a_partir_de_poligono(
     area_ha = await _calcular_area_ha(db, geometria_wkb)
     talhao = Talhao(propriedade_id=propriedade_id, nome=nome, geometria=geometria_wkb, area_ha=area_ha)
     db.add(talhao)
+    await db.flush()
+
+    await _parametrizar_solo_do_talhao(talhao, poligono)  # feature 004 — nunca bloqueia (FR-006)
+
     await db.commit()
     await db.refresh(talhao)
     return talhao, aviso
