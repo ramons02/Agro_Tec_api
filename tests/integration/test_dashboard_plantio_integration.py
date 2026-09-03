@@ -174,3 +174,53 @@ async def test_talhao_sem_balanco_calculado_aparece_com_status_nulo(
     dados = resposta.json()["dados"]
     item = next(i for i in dados["itens"] if i["nome"] == "Talhão Recém-Cadastrado")
     assert item["status_plantio"] is None
+
+
+# --- Feature 015: exportação CSV ---------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_exportacao_csv_tem_bom_utf8_e_content_disposition(
+    client: AsyncClient, tres_talhoes_status_distintos
+):
+    resposta = await client.get("/api/v1/dashboard/plantio/exportar.csv")
+
+    assert resposta.status_code == 200
+    assert resposta.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resposta.headers["content-disposition"]
+    assert resposta.content.startswith(b"\xef\xbb\xbf")  # BOM UTF-8 (FR-003)
+
+
+@pytest.mark.asyncio
+async def test_exportacao_csv_contem_todos_os_talhoes_filtrados(
+    client: AsyncClient, tres_talhoes_status_distintos
+):
+    resposta = await client.get("/api/v1/dashboard/plantio/exportar.csv")
+
+    texto = resposta.content.decode("utf-8-sig")
+    linhas = texto.strip().splitlines()
+    assert len(linhas) == 4  # cabeçalho + 3 talhões
+    assert "Propriedade;Talhao;Area (ha);Solo;Status;Armazenamento (mm);% da CAD" == linhas[0]
+    nomes_exportados = {linha.split(";")[1] for linha in linhas[1:]}
+    assert nomes_exportados == {"Verde", "Amarelo", "Vermelho"}
+
+
+@pytest.mark.asyncio
+async def test_exportacao_csv_respeita_filtro_de_status(
+    client: AsyncClient, tres_talhoes_status_distintos
+):
+    resposta = await client.get("/api/v1/dashboard/plantio/exportar.csv?status=VERMELHO")
+
+    texto = resposta.content.decode("utf-8-sig")
+    linhas = [linha for linha in texto.strip().splitlines() if linha]
+    assert len(linhas) == 2  # cabeçalho + 1 talhão
+    assert "Vermelho" in linhas[1]
+
+
+@pytest.mark.asyncio
+async def test_exportacao_csv_sem_talhoes_retorna_so_cabecalho(client: AsyncClient):
+    resposta = await client.get("/api/v1/dashboard/plantio/exportar.csv")
+
+    texto = resposta.content.decode("utf-8-sig")
+    linhas = [linha for linha in texto.strip().splitlines() if linha]
+    assert len(linhas) == 1
