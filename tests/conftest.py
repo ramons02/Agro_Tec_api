@@ -23,7 +23,11 @@ async def db_session():
         poolclass=StaticPool,
     )
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # Cria só as tabelas sem coluna PostGIS: Geometry exige spatialite no
+        # SQLite (indisponível neste ambiente). Models com geometria (EstacaoInmet,
+        # Propriedade, Talhao) são validados contra Postgres+PostGIS real via
+        # quickstart.md de cada feature, não por este fixture.
+        await conn.run_sync(Base.metadata.create_all, tables=[Usuario.__table__])
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:

@@ -8,14 +8,14 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Adicionar dependências `httpx`, `APScheduler` ao projeto (`pyproject.toml`)
-- [ ] T002 [P] Criar `app/core/scheduler.py` com instância do APScheduler registrada no ciclo de vida da app (`lifespan` do FastAPI)
+- [X] T001 Adicionar dependências `httpx`, `APScheduler` ao projeto (`pyproject.toml`)
+- [X] T002 [P] Criar `app/core/scheduler.py` com instância do APScheduler registrada no ciclo de vida da app (`lifespan` do FastAPI)
 
 ## Phase 2: Foundational
 
-- [ ] T003 Criar modelos `EstacaoInmet` e `MedicaoClima` em `app/db/models/` conforme `data-model.md` (incluindo enum `fonte_dados`)
-- [ ] T004 [P] Criar migração Alembic para `estacoes_inmet` e `medicoes_clima`, com índice `(estacao_codigo, data_hora_utc DESC)` e constraint de unicidade `(estacao_codigo, data_hora_utc)`
-- [ ] T005 [P] Popular `estacoes_inmet` com a lista conhecida de estações automáticas do INMET no Pará (seed/migração de dados)
+- [X] T003 Criar modelos `EstacaoInmet` e `MedicaoClima` em `app/db/models/` conforme `data-model.md` (incluindo enum `fonte_dados`)
+- [X] T004 [P] Criar migração Alembic para `estacoes_inmet` e `medicoes_clima`, com índice `(estacao_codigo, data_hora_utc DESC)` e constraint de unicidade `(estacao_codigo, data_hora_utc)`
+- [X] T005 [P] Popular `estacoes_inmet` com a lista conhecida de estações automáticas do INMET no Pará (seed/migração de dados)
 
 **Checkpoint**: schema pronto para receber medições.
 
@@ -29,10 +29,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T006 [P] [US1] Implementar `app/services/inmet_service.py`: cliente `httpx` assíncrono com timeout de 3.0s, parsing da resposta do INMET
-- [ ] T007 [US1] Implementar upsert de medição (`ON CONFLICT DO NOTHING`) em `app/db/models/medicao_clima.py` ou em um repositório dedicado
-- [ ] T008 [US1] Implementar o job de ingestão (`ingestar_todas_estacoes`) que itera as estações e persiste medições com `fonte_dados="AO_VIVO"`
-- [ ] T009 [US1] Registrar o job no APScheduler com cadência de 10 minutos (ver research.md)
+- [X] T006 [P] [US1] Implementar `app/services/inmet_service.py`: cliente `httpx` assíncrono com timeout de 3.0s, parsing da resposta do INMET
+- [X] T007 [US1] Implementar upsert de medição (`ON CONFLICT DO NOTHING`) em `app/db/models/medicao_clima.py` ou em um repositório dedicado
+- [X] T008 [US1] Implementar o job de ingestão (`ingestar_todas_estacoes`) que itera as estações e persiste medições com `fonte_dados="AO_VIVO"`
+- [X] T009 [US1] Registrar o job no APScheduler com cadência de 10 minutos (ver research.md)
 
 **Checkpoint**: ingestão funcionando e populando o banco sem duplicidade.
 
@@ -46,9 +46,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Capturar timeout/erro HTTP em `inmet_service.py` e levantar exceção específica (`FonteIndisponivelError`)
-- [ ] T011 [US2] No job de ingestão, ao capturar `FonteIndisponivelError`, chamar o serviço da feature 003 (`openmeteo_service.obter_previsao`) para a coordenada da estação e persistir a medição equivalente
-- [ ] T012 [US2] Registrar log estruturado de cada fallback acionado (estação, motivo, timestamp)
+- [X] T010 [US2] Capturar timeout/erro HTTP em `inmet_service.py` e levantar exceção específica (`FonteIndisponivelError`)
+- [X] T011 [US2] No job de ingestão, ao capturar `FonteIndisponivelError`, chamar o serviço da feature 003 (`openmeteo_service.obter_previsao`) para a coordenada da estação e persistir a medição equivalente
+- [X] T012 [US2] Registrar log estruturado de cada fallback acionado (estação, motivo, timestamp)
 
 **Checkpoint**: fallback funcional — nenhuma estação fica sem dado só por falha pontual do INMET.
 
@@ -56,9 +56,9 @@
 
 ## Phase Final: Polish
 
-- [ ] T013 [P] Implementar job diário de agregação/retenção (RNF014): compactar medições com mais de 12 meses em agregados diários
-- [ ] T014 [P] Escrever testes unitários com mock de `httpx` para timeout e fallback em `tests/unit/test_fallback_timeout.py`
-- [ ] T015 Rodar os 3 cenários de `quickstart.md`
+- [X] T013 [P] Implementar job diário de agregação/retenção (RNF014): compactar medições com mais de 12 meses em agregados diários
+- [X] T014 [P] Escrever testes unitários com mock de `httpx` para timeout e fallback em `tests/unit/test_fallback_timeout.py`
+- [X] T015 Rodar os 3 cenários de `quickstart.md`
 
 ## Dependencies & Execution Order
 
