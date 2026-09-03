@@ -12,6 +12,7 @@ from shapely.geometry import shape
 from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.calculos.pulverizacao import classificar_pulverizacao
 from app.core.calculos.solo import calcular_cad, classificar_textura, estimar_cc_pmp
 from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
 from app.core.response import AppError, envelope_sucesso
@@ -19,6 +20,7 @@ from app.core.security import UsuarioAutenticado, get_current_user
 from app.db.models.talhao import Talhao, TipoSolo
 from app.db.queries.estacao_proxima import buscar_estacao_mais_proxima
 from app.db.session import get_db
+from app.services.clima_tempo_real_service import obter_clima_atual
 from app.services.importacao_geo_service import ArquivoGeoInvalidoError, extrair_primeiro_poligono
 from app.services.soilgrids_service import FonteSoloIndisponivelError, parametrizar_solo
 
@@ -277,6 +279,32 @@ async def obter_estacao_mais_proxima(
             "estacao_codigo": resultado.estacao_codigo,
             "municipio": resultado.municipio,
             "distancia_km": resultado.distancia_km,
+        }
+    )
+
+
+@router.get("/{talhao_id}/pulverizacao")
+async def obter_pulverizacao(
+    talhao_id: uuid.UUID,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """RF022/RF023 (feature 009) — classificação da janela de pulverização a
+    partir da leitura de vento mais recente (feature 008) da estação mais
+    próxima (feature 006)."""
+    talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    clima = await obter_clima_atual(db, talhao)
+    if clima is None or clima.vento_kmh is None:
+        # T005 — nunca apresenta uma classificação como se fosse válida sem dado.
+        raise AppError(404, "Sem leitura de vento disponível para classificar a pulverização.")
+
+    classificacao = classificar_pulverizacao(clima.vento_kmh, clima.rajada_kmh or 0.0)
+    return envelope_sucesso(
+        {
+            "classificacao": classificacao.value,
+            "vento_kmh": clima.vento_kmh,
+            "rajada_kmh": clima.rajada_kmh,
+            "fonte_dados": clima.fonte_dados.value,
         }
     )
 

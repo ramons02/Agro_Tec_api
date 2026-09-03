@@ -12,7 +12,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T001 Definir enum `ClassificacaoPulverizacao` (`FAVORAVEL`, `BLOQUEIO_VENTO_FORTE`, `BLOQUEIO_INVERSAO_TERMICA`) em `app/core/calculos/pulverizacao.py`
+- [X] T001 Definir enum `ClassificacaoPulverizacao` (`FAVORAVEL`, `BLOQUEIO_VENTO_FORTE`, `BLOQUEIO_INVERSAO_TERMICA`) em `app/core/calculos/pulverizacao.py`
 
 ## Phase 3: User Story 1 - Classificar a janela de pulverização (Priority: P1) 🎯 MVP
 
@@ -22,8 +22,8 @@
 
 ### Implementation for User Story 1
 
-- [ ] T002 [US1] Implementar `classificar_pulverizacao(vento_kmh, rajada_kmh) -> ClassificacaoPulverizacao` em `app/core/calculos/pulverizacao.py`, portando `regrasPulverizacao.ts`: inversão térmica (vento < 3, checada primeiro e isoladamente) → vento forte (vento > 10 ou rajada > 15) → favorável (caso contrário)
-- [ ] T003 [P] [US1] Escrever teste de tabela cobrindo todos os casos do `quickstart.md`, incluindo as fronteiras exatas, em `tests/unit/test_calculos_pulverizacao.py`
+- [X] T002 [US1] Implementar `classificar_pulverizacao(vento_kmh, rajada_kmh) -> ClassificacaoPulverizacao` em `app/core/calculos/pulverizacao.py`, portando `regrasPulverizacao.ts` **na mesma ordem de checagem**: vento forte (vento > 10 ou rajada > 15) checado PRIMEIRO → inversão térmica (vento < 3) → favorável (caso contrário). Importa no caso de borda vento<3 e rajada>15 simultâneos, onde a ordem decide o resultado.
+- [X] T003 [P] [US1] Escrever teste de tabela cobrindo todos os casos do `quickstart.md`, incluindo as fronteiras exatas, em `tests/unit/test_calculos_pulverizacao.py`
 
 **Checkpoint**: função de classificação validada e correta.
 
@@ -37,8 +37,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T004 [US2] Implementar endpoint `GET /api/v1/talhoes/{id}/pulverizacao` (contrato em `contracts/pulverizacao.md`): resolve estação mais próxima (feature 006), obtém leitura via feature 008, aplica `classificar_pulverizacao`
-- [ ] T005 [US2] Tratar ausência de leitura de vento disponível sem apresentar uma classificação como se fosse válida (retornar indicação explícita de dado indisponível)
+- [X] T004 [US2] Implementar endpoint `GET /api/v1/talhoes/{id}/pulverizacao` (contrato em `contracts/pulverizacao.md`): resolve estação mais próxima (feature 006), obtém leitura via feature 008, aplica `classificar_pulverizacao`
+- [X] T005 [US2] Tratar ausência de leitura de vento disponível sem apresentar uma classificação como se fosse válida (retornar indicação explícita de dado indisponível)
 
 **Checkpoint**: endpoint completo, pronto para consumo pelo frontend e pela feature 012.
 
@@ -46,7 +46,7 @@
 
 ## Phase Final: Polish
 
-- [ ] T006 Rodar os 4 cenários de `quickstart.md`
+- [X] T006 Rodar os 4 cenários de `quickstart.md`
 
 ## Dependencies & Execution Order
 
