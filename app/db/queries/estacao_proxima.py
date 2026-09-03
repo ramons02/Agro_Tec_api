@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from geoalchemy2.functions import ST_Centroid, ST_Distance
+from geoalchemy2.functions import ST_X, ST_Y, ST_Centroid, ST_Distance
 from geoalchemy2.types import Geography
 from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,8 @@ class EstacaoProximaResultado:
     estacao_codigo: str
     municipio: str
     distancia_km: float
+    latitude: float
+    longitude: float
 
 
 async def buscar_estacoes_mais_proximas(
@@ -27,18 +29,31 @@ async def buscar_estacoes_mais_proximas(
     para explorar o índice GiST, e `::geography` para distância real em
     metros. Retorna até `limite` estações (padrão 3, para a interpolação IDW
     de `calculos-geo-metero.md` §1B); com menos estações cadastradas na área,
-    retorna as disponíveis (mínimo 0)."""
+    retorna as disponíveis (mínimo 0). Latitude/longitude vêm junto para o
+    frontend poder plotar a estação no mapa sem uma segunda chamada."""
     centroide = ST_Centroid(talhao.geometria)
     distancia_km = ST_Distance(cast(EstacaoInmet.posicao, Geography), cast(centroide, Geography)) / 1000
 
     resultado = await db.execute(
-        select(EstacaoInmet.codigo, EstacaoInmet.nome, distancia_km)
+        select(
+            EstacaoInmet.codigo,
+            EstacaoInmet.nome,
+            distancia_km,
+            ST_Y(EstacaoInmet.posicao),
+            ST_X(EstacaoInmet.posicao),
+        )
         .order_by(EstacaoInmet.posicao.op("<->")(centroide))
         .limit(limite)
     )
     return [
-        EstacaoProximaResultado(estacao_codigo=codigo, municipio=municipio, distancia_km=round(distancia, 2))
-        for codigo, municipio, distancia in resultado.all()
+        EstacaoProximaResultado(
+            estacao_codigo=codigo,
+            municipio=municipio,
+            distancia_km=round(distancia, 2),
+            latitude=latitude,
+            longitude=longitude,
+        )
+        for codigo, municipio, distancia, latitude, longitude in resultado.all()
     ]
 
 

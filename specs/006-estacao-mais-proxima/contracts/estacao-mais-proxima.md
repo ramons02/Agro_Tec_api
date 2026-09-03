@@ -11,9 +11,9 @@ próximas (era 1), usadas na interpolação IDW de `calculos-geo-metero.md` §1B
   "data_consulta_utc": "2026-09-03T12:00:00Z",
   "dados": {
     "estacoes": [
-      {"estacao_codigo": "A901", "municipio": "Belém", "distancia_km": 12.4},
-      {"estacao_codigo": "A902", "municipio": "Ananindeua", "distancia_km": 18.7},
-      {"estacao_codigo": "A903", "municipio": "Marituba", "distancia_km": 25.1}
+      {"estacao_codigo": "A901", "municipio": "Belém", "distancia_km": 12.4, "latitude": -1.455, "longitude": -48.495},
+      {"estacao_codigo": "A902", "municipio": "Ananindeua", "distancia_km": 18.7, "latitude": -1.365, "longitude": -48.371},
+      {"estacao_codigo": "A903", "municipio": "Marituba", "distancia_km": 25.1, "latitude": -1.360, "longitude": -48.339}
     ]
   }
 }

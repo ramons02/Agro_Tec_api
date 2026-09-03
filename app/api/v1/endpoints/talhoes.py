@@ -294,6 +294,8 @@ async def obter_estacao_mais_proxima(
                     "estacao_codigo": r.estacao_codigo,
                     "municipio": r.municipio,
                     "distancia_km": r.distancia_km,
+                    "latitude": r.latitude,
+                    "longitude": r.longitude,
                 }
                 for r in resultados
             ]
