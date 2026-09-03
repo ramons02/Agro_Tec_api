@@ -1,15 +1,17 @@
 # AgroClima Pará — API
 
-Backend (FastAPI) do projeto AgroClima Pará. Ver a documentação completa
-(Constituição, Convenção Técnica, requisitos, HUs) em `Agro_Tec_documentacao`.
+Backend (FastAPI) do projeto AgroClima Pará. Só código aqui — a documentação
+completa (Constituição, Convenção Técnica, requisitos, HUs) e o planejamento
+Spec Kit deste backend (`specs/`, `.specify/`) moram em `Agro_Tec_documentacao`.
 
 ## Variáveis de ambiente
 
-As variáveis de ambiente deste serviço (`.env`) são versionadas em
-`Agro_Tec_infra` como `api.env.example` — copie de lá para `.env` nesta pasta:
+As variáveis de ambiente deste serviço moram fisicamente em `Agro_Tec_infra`
+(`api.env`, nunca commitado) — este repositório aponta pra lá por link
+simbólico:
 
 ```bash
-cp ../Agro_Tec_infra/api.env.example .env
+ln -s ../Agro_Tec_infra/api.env .env
 ```
 
 Nunca commitar o `.env` real (com segredos) neste repositório.
