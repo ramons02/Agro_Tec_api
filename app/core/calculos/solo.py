@@ -43,7 +43,8 @@ def estimar_cc_pmp(
     assumia isso incorretamente. Coeficientes reproduzidos de memória, sem
     acesso à publicação original nesta sessão para conferência linha a linha.
     **Recomendado validar com um agrônomo/pedólogo antes de decisões reais de
-    plantio baseadas neste valor** — ver Assumptions em specs/004.../spec.md.
+    plantio baseadas neste valor** — ver Assumptions em
+    Agro_Tec_documentacao/specs/004-solo-soilgrids/spec.md.
     """
     areia_fracao = fracao_areia_pct / 100
     argila_fracao = fracao_argila_pct / 100
