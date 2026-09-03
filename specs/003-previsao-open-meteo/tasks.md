@@ -8,11 +8,11 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Configurar cache em memória (`cachetools.TTLCache`, TTL 30min) ou Redis, conforme disponibilidade de infraestrutura, em `app/services/openmeteo_service.py`
+- [X] T001 [P] Configurar cache em memória (`cachetools.TTLCache`, TTL 30min) ou Redis, conforme disponibilidade de infraestrutura, em `app/services/openmeteo_service.py`
 
 ## Phase 2: Foundational
 
-- [ ] T002 Definir schema Pydantic `PrevisaoClimatica` (vento 10m/100m, ET0, umidade do solo em 4 profundidades, `obtido_em_utc`) em `app/services/openmeteo_service.py` conforme `data-model.md`
+- [X] T002 Definir schema Pydantic `PrevisaoClimatica` (vento 10m/100m, ET0, umidade do solo em 4 profundidades, `obtido_em_utc`) em `app/services/openmeteo_service.py` conforme `data-model.md`
 
 **Checkpoint**: tipos prontos para a implementação do cliente.
 
@@ -26,9 +26,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Implementar `obter_previsao(latitude, longitude)` em `app/services/openmeteo_service.py`: chamada `httpx` assíncrona ao endpoint de previsão horária com os parâmetros `wind_speed_10m`, `wind_speed_100m`, `et0_fao_evapotranspiration`, `soil_moisture_0_to_7cm` (e demais camadas)
-- [ ] T004 [US1] Implementar parsing da resposta para o schema `PrevisaoClimatica`
-- [ ] T005 [US1] Levantar `FontePrevisaoIndisponivelError` em caso de timeout (3.0s) ou erro HTTP
+- [X] T003 [US1] Implementar `obter_previsao(latitude, longitude)` em `app/services/openmeteo_service.py`: chamada `httpx` assíncrona ao endpoint de previsão horária com os parâmetros `wind_speed_10m`, `wind_speed_100m`, `et0_fao_evapotranspiration`, `soil_moisture_0_to_7cm` (e demais camadas)
+- [X] T004 [US1] Implementar parsing da resposta para o schema `PrevisaoClimatica`
+- [X] T005 [US1] Levantar `FontePrevisaoIndisponivelError` em caso de timeout (3.0s) ou erro HTTP
 
 **Checkpoint**: previsão funcional para chamadas diretas ao serviço.
 
@@ -42,8 +42,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T006 [US2] Implementar chave de cache por `(lat arredondada, long arredondada, hora)` com TTL de 30min em `obter_previsao`
-- [ ] T007 [US2] Adicionar contador/log de chamadas reais à API para observabilidade do volume diário
+- [X] T006 [US2] Implementar chave de cache por `(lat arredondada, long arredondada, hora)` com TTL de 30min em `obter_previsao`
+- [X] T007 [US2] Adicionar contador/log de chamadas reais à API para observabilidade do volume diário
 
 **Checkpoint**: volume de chamadas visivelmente reduzido para coordenadas próximas.
 
@@ -51,8 +51,8 @@
 
 ## Phase Final: Polish
 
-- [ ] T008 [P] Escrever testes com fixtures de payload real da Open-Meteo em `tests/contract/test_openmeteo_service.py`
-- [ ] T009 Rodar os 2 cenários de `quickstart.md`
+- [X] T008 [P] Escrever testes com fixtures de payload real da Open-Meteo em `tests/contract/test_openmeteo_service.py`
+- [X] T009 Rodar os 2 cenários de `quickstart.md`
 
 ## Dependencies & Execution Order
 
