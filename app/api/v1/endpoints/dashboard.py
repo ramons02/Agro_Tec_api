@@ -8,7 +8,7 @@ from sqlalchemy.orm import aliased
 
 from app.core.calculos.status_plantio import StatusPlantio
 from app.core.response import envelope_sucesso
-from app.core.security import UsuarioAutenticado, get_current_user
+from app.core.security import UsuarioAutenticado, get_current_user, propriedade_ids_visiveis
 from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
 from app.db.models.propriedade import Propriedade
 from app.db.models.talhao import Talhao
@@ -47,9 +47,10 @@ async def dashboard_plantio(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> dict:
-    """RF026/RF027, RNF017 (feature 011) — TODO(feature 014): aplicar escopo
-    RBAC assim que os vínculos agrônomo-propriedade existirem; por ora lista
-    todos os talhões, igual às demais listagens antes da 014."""
+    """RF026/RF027, RNF017 (feature 011) — feature 014/FR-004: escopo por
+    propriedades visíveis ao usuário (dono, vínculo aceito, ou GESTOR_TECNOLOGIA
+    sem restrição)."""
+    ids_visiveis = await propriedade_ids_visiveis(db, usuario)
     ultimo_balanco = aliased(_subquery_ultimo_balanco(), name="ultimo_balanco")
 
     query = (
@@ -66,6 +67,8 @@ async def dashboard_plantio(
         .join(Propriedade, Propriedade.id == Talhao.propriedade_id)
         .outerjoin(ultimo_balanco, ultimo_balanco.c.talhao_id == Talhao.id)
     )
+    if ids_visiveis is not None:
+        query = query.where(Talhao.propriedade_id.in_(ids_visiveis))
     if propriedade_id is not None:
         query = query.where(Talhao.propriedade_id == propriedade_id)
     if status is not None:

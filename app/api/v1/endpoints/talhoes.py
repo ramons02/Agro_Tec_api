@@ -21,7 +21,12 @@ from app.core.calculos.pulverizacao import (
 from app.core.calculos.solo import calcular_cad, classificar_textura, estimar_cc_pmp
 from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
 from app.core.response import AppError, envelope_sucesso
-from app.core.security import UsuarioAutenticado, get_current_user
+from app.core.security import (
+    UsuarioAutenticado,
+    get_current_user,
+    propriedade_ids_visiveis,
+    verificar_dono_ou_gestor,
+)
 from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
 from app.db.models.talhao import Talhao, TipoSolo
 from app.db.queries.estacao_proxima import buscar_estacoes_mais_proximas
@@ -208,7 +213,10 @@ async def criar_talhao(
     usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """FR-002/FR-004, RN015, RN016 — cadastro de talhão com validações geométricas."""
+    """FR-002/FR-004, RN015, RN016 — cadastro de talhão com validações geométricas.
+    Feature 014/FR-002/FR-004: só o dono da propriedade ou GESTOR_TECNOLOGIA
+    cadastram talhão nela."""
+    await verificar_dono_ou_gestor(db, usuario, payload.propriedade_id)
     poligono = shape(payload.geometria)
     talhao, aviso = await _criar_talhao_a_partir_de_poligono(
         db, payload.propriedade_id, payload.nome, poligono, payload.confirmar_fora_do_para
@@ -226,6 +234,7 @@ async def importar_talhao(
     confirmar_fora_do_para: Annotated[bool, Form()] = False,
 ) -> dict:
     """FR-005 — importa a geometria (Polygon ou MultiPolygon) de um GeoJSON, KML ou Shapefile."""
+    await verificar_dono_ou_gestor(db, usuario, propriedade_id)
     conteudo = await arquivo.read()
     try:
         poligono = extrair_geometria(arquivo.filename or "", conteudo)
@@ -246,8 +255,13 @@ async def listar_talhoes(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> dict:
-    """FR-002, RNF017 — listagem paginada, com filtro opcional por propriedade."""
+    """FR-002, RNF017 — listagem paginada, com filtro opcional por propriedade.
+    Feature 014/FR-004: escopo por propriedades visíveis ao usuário."""
+    ids_visiveis = await propriedade_ids_visiveis(db, usuario)
+
     query = select(Talhao)
+    if ids_visiveis is not None:
+        query = query.where(Talhao.propriedade_id.in_(ids_visiveis))
     if propriedade_id is not None:
         query = query.where(Talhao.propriedade_id == propriedade_id)
 
@@ -265,6 +279,17 @@ async def _buscar_talhao_ou_404(db: AsyncSession, talhao_id: uuid.UUID) -> Talha
     return talhao
 
 
+async def _verificar_talhao_visivel_ou_404(
+    db: AsyncSession, usuario: UsuarioAutenticado, talhao: Talhao
+) -> None:
+    """Feature 014/FR-004 — leitura de um talhão específico: 404, não 403,
+    igual à mesma checagem em propriedades.py (não confirma existência do
+    recurso pra quem não pode vê-lo)."""
+    ids_visiveis = await propriedade_ids_visiveis(db, usuario)
+    if ids_visiveis is not None and talhao.propriedade_id not in ids_visiveis:
+        raise AppError(404, "Talhão não encontrado.")
+
+
 @router.get("/{talhao_id}")
 async def obter_talhao(
     talhao_id: uuid.UUID,
@@ -272,6 +297,7 @@ async def obter_talhao(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
     return envelope_sucesso((await _serializar(db, talhao)).model_dump(mode="json"))
 
 
@@ -284,6 +310,7 @@ async def obter_estacao_mais_proxima(
     """RF015/RF016/RF035 (feature 006, Escopo V3) — as 3 estações INMET mais
     próximas do talhão, usadas na interpolação IDW (calculos-geo-metero.md §1B)."""
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
     resultados = await buscar_estacoes_mais_proximas(db, talhao)
     if not resultados:
         raise AppError(404, "Nenhuma estação disponível.")
@@ -314,6 +341,7 @@ async def obter_pulverizacao(
     ambas a partir da leitura mais recente (feature 008/006), checagens
     independentes e complementares — ver Adendo V3 em REQUISITOS.md."""
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
     clima = await obter_clima_atual(db, talhao)
     if clima is None or clima.vento_kmh is None:
         # T005 — nunca apresenta uma classificação como se fosse válida sem dado.
@@ -355,6 +383,7 @@ async def obter_balanco_hidrico(
     """Feature 010 — leitura do balanço hídrico mais recente (uso interno/debug;
     contrato em `contracts/balanco-hidrico.md`)."""
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
     resultado = await db.execute(
         select(BalancoHidricoDiario)
         .where(BalancoHidricoDiario.talhao_id == talhao.id)
@@ -392,7 +421,9 @@ async def excluir_talhao(
     usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
-    """FR-002 — exclusão isolada do talhão (não afeta a propriedade nem outros talhões)."""
+    """FR-002 — exclusão isolada do talhão (não afeta a propriedade nem outros talhões).
+    Feature 014/FR-002/FR-004: só o dono da propriedade ou GESTOR_TECNOLOGIA."""
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await verificar_dono_ou_gestor(db, usuario, talhao.propriedade_id)
     await db.delete(talhao)
     await db.commit()
