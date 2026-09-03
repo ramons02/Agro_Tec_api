@@ -12,8 +12,8 @@
 
 ## Phase 2: Foundational
 
-- [ ] T001 Criar modelo `BalancoHidricoDiario` em `app/db/models/` (talhao_id, data, armazenamento_mm, precipitacao_mm, evapotranspiracao_mm) conforme `data-model.md`
-- [ ] T002 [P] Criar migração Alembic com índice `(talhao_id, data DESC)` e unicidade `(talhao_id, data)`
+- [X] T001 Criar modelo `BalancoHidricoDiario` em `app/db/models/` (talhao_id, data, armazenamento_mm, precipitacao_mm, evapotranspiracao_mm) conforme `data-model.md`
+- [X] T002 [P] Criar migração Alembic com índice `(talhao_id, data DESC)` e unicidade `(talhao_id, data)`
 
 **Checkpoint**: schema pronto para armazenar o histórico diário.
 
@@ -27,11 +27,11 @@
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Implementar `calcular_armazenamento(arm_anterior_mm, precipitacao_mm, et0_mm, kc, cad_mm) -> float` em `app/core/calculos/balanco_hidrico.py` (função pura, RN007), limitando ao intervalo `[0, cad_mm]`
-- [ ] T004 [P] [US1] Escrever teste de tabela com os 3 cenários do `quickstart.md` em `tests/unit/test_calculos_balanco_hidrico.py`
-- [ ] T005 [US1] Implementar o job diário (`app/core/scheduler.py`, novo job): para cada talhão ativo, obtém $ET_0$/precipitação (feature 003) e CAD (feature 004), calcula e persiste `BalancoHidricoDiario`
-- [ ] T006 [US1] Aplicar valor inicial de $ARM_0 = 0,70 \times CAD$ para talhão sem histórico (ver research.md)
-- [ ] T007 [US1] Aplicar $K_c$ fixo da fase inicial (ver research.md) no cálculo de $ET_i = ET_0 \times K_c$
+- [X] T003 [US1] Implementar `calcular_armazenamento(arm_anterior_mm, precipitacao_mm, et0_mm, kc, cad_mm) -> float` em `app/core/calculos/balanco_hidrico.py` (função pura, RN007), limitando ao intervalo `[0, cad_mm]`
+- [X] T004 [P] [US1] Escrever teste de tabela com os 3 cenários do `quickstart.md` em `tests/unit/test_calculos_balanco_hidrico.py`
+- [X] T005 [US1] Implementar o job diário (`app/core/scheduler.py`, novo job): para cada talhão ativo, obtém $ET_0$/precipitação (feature 003) e CAD (feature 004), calcula e persiste `BalancoHidricoDiario`
+- [X] T006 [US1] Aplicar valor inicial de $ARM_0 = 0,70 \times CAD$ para talhão sem histórico (ver research.md)
+- [X] T007 [US1] Aplicar $K_c$ fixo da fase inicial (ver research.md) no cálculo de $ET_i = ET_0 \times K_c$
 
 **Checkpoint**: job diário funcional, produzindo histórico correto por talhão.
 
@@ -39,8 +39,8 @@
 
 ## Phase Final: Polish
 
-- [ ] T008 [P] Implementar endpoint de leitura `GET /api/v1/talhoes/{id}/balanco-hidrico` (contrato em `contracts/balanco-hidrico.md`), útil para debug/consumo direto
-- [ ] T009 Rodar os 3 cenários de `quickstart.md`
+- [X] T008 [P] Implementar endpoint de leitura `GET /api/v1/talhoes/{id}/balanco-hidrico` (contrato em `contracts/balanco-hidrico.md`), útil para debug/consumo direto
+- [X] T009 Rodar os 3 cenários de `quickstart.md`
 
 ## Dependencies & Execution Order
 

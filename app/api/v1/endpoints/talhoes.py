@@ -17,6 +17,7 @@ from app.core.calculos.solo import calcular_cad, classificar_textura, estimar_cc
 from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
 from app.core.response import AppError, envelope_sucesso
 from app.core.security import UsuarioAutenticado, get_current_user
+from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
 from app.db.models.talhao import Talhao, TipoSolo
 from app.db.queries.estacao_proxima import buscar_estacao_mais_proxima
 from app.db.session import get_db
@@ -305,6 +306,46 @@ async def obter_pulverizacao(
             "vento_kmh": clima.vento_kmh,
             "rajada_kmh": clima.rajada_kmh,
             "fonte_dados": clima.fonte_dados.value,
+        }
+    )
+
+
+@router.get("/{talhao_id}/balanco-hidrico")
+async def obter_balanco_hidrico(
+    talhao_id: uuid.UUID,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Feature 010 — leitura do balanço hídrico mais recente (uso interno/debug;
+    contrato em `contracts/balanco-hidrico.md`)."""
+    talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    resultado = await db.execute(
+        select(BalancoHidricoDiario)
+        .where(BalancoHidricoDiario.talhao_id == talhao.id)
+        .order_by(BalancoHidricoDiario.data.desc())
+        .limit(1)
+    )
+    registro = resultado.scalars().first()
+    if registro is None:
+        raise AppError(404, "Balanço hídrico ainda não calculado para este talhão.")
+
+    if talhao.capacidade_agua_disponivel_mm:
+        percentual_cad = (
+            float(registro.armazenamento_mm) / float(talhao.capacidade_agua_disponivel_mm) * 100
+        )
+    else:
+        percentual_cad = None
+
+    return envelope_sucesso(
+        {
+            "data": registro.data.isoformat(),
+            "armazenamento_mm": float(registro.armazenamento_mm),
+            "cad_mm": (
+                float(talhao.capacidade_agua_disponivel_mm)
+                if talhao.capacidade_agua_disponivel_mm
+                else None
+            ),
+            "percentual_cad": percentual_cad,
         }
     )
 

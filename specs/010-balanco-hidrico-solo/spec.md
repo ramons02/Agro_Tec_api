@@ -55,4 +55,4 @@ O sistema calcula, dia a dia, quanta água está armazenada no solo de um talhã
 
 - No primeiro dia de um talhão sem histórico, o armazenamento inicial assume um valor de referência razoável (ex.: um percentual médio da CAD) — o valor exato é um detalhe de calibração a ser definido no plano técnico.
 - O coeficiente de cultivo ($K_c$) usado para derivar a evapotranspiração da cultura a partir da evapotranspiração de referência ($ET_0$) corresponde à fase inicial da cultura, conforme `requisitos/REQUISITOS.md` (RN007).
-- Depende das features de Solo (004, para CAD) e Previsão Open-Meteo (003, para ET0 e precipitação) como fontes de dado.
+- Depende da feature de Solo (004, para CAD), da Previsão Open-Meteo (003, para ET0) e da Ingestão INMET (002, para a precipitação diária real medida na estação) como fontes de dado. **Correção em relação à primeira versão desta spec**: a precipitação ($P_i$) vem da estação INMET medida (`medicoes_clima`), não do Open-Meteo — é o que `escopo/calculos-geo-metero.md` §4B especifica textualmente ("Precipitação pluviométrica diária **da estação INMET**"), não uma previsão.

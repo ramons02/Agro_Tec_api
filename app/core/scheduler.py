@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 
 from app.db.models.medicao_clima import MedicaoClima
 from app.db.session import AsyncSessionLocal
+from app.services.balanco_hidrico_service import calcular_balanco_hidrico_todos_talhoes
 from app.services.ingestao_service import ingerir_todas_estacoes
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,12 @@ async def _job_retencao_diaria() -> None:
             await db.commit()
 
 
+async def _job_balanco_hidrico_diario() -> None:
+    async with AsyncSessionLocal() as db:
+        calculados = await calcular_balanco_hidrico_todos_talhoes(db)
+        logger.info("Balanço hídrico calculado para %d talhão(ões)", calculados)
+
+
 def iniciar_scheduler() -> None:
     scheduler.add_job(
         _job_ingestao_periodica,
@@ -53,6 +60,12 @@ def iniciar_scheduler() -> None:
         _job_retencao_diaria,
         IntervalTrigger(days=1),
         id="retencao_medicoes_diaria",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _job_balanco_hidrico_diario,
+        IntervalTrigger(days=1),
+        id="balanco_hidrico_diario",
         replace_existing=True,
     )
     scheduler.start()
