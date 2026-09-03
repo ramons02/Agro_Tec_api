@@ -1,0 +1,224 @@
+import json
+import uuid
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, File, Form, UploadFile
+from geoalchemy2.functions import ST_Area, ST_AsGeoJSON, ST_Intersection, ST_Overlaps
+from geoalchemy2.shape import from_shape
+from geoalchemy2.types import Geography
+from pydantic import BaseModel
+from shapely.geometry import shape
+from sqlalchemy import cast, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
+from app.core.response import AppError, envelope_sucesso
+from app.core.security import UsuarioAutenticado, get_current_user
+from app.db.models.talhao import Talhao
+from app.db.session import get_db
+from app.services.importacao_geo_service import ArquivoGeoInvalidoError, extrair_primeiro_poligono
+
+router = APIRouter(prefix="/talhoes", tags=["talhoes"])
+
+AREA_MINIMA_SOBREPOSICAO_M2 = 10.0
+DEFAULT_PAGE_SIZE = 20
+
+
+class TalhaoCreate(BaseModel):
+    propriedade_id: uuid.UUID
+    nome: str
+    geometria: dict[str, Any]
+    confirmar_fora_do_para: bool = False
+
+
+class TalhaoRead(BaseModel):
+    id: uuid.UUID
+    propriedade_id: uuid.UUID
+    nome: str
+    geometria: dict[str, Any]
+    area_ha: float
+    aviso: str | None = None
+
+
+async def _serializar(db: AsyncSession, talhao: Talhao, aviso: str | None = None) -> TalhaoRead:
+    resultado = await db.execute(select(ST_AsGeoJSON(talhao.geometria)))
+    return TalhaoRead(
+        id=talhao.id,
+        propriedade_id=talhao.propriedade_id,
+        nome=talhao.nome,
+        geometria=json.loads(resultado.scalar_one()),
+        area_ha=float(talhao.area_ha),
+        aviso=aviso,
+    )
+
+
+async def _calcular_area_ha(db: AsyncSession, geometria_wkb) -> float:
+    """Área real (m²→ha) via projeção geográfica (`::geography`), não planar em
+    graus — RF012/Princípio IV: nunca cálculo aproximado em aplicação."""
+    resultado = await db.execute(select(ST_Area(cast(geometria_wkb, Geography)) / 10000))
+    return resultado.scalar_one()
+
+
+async def _buscar_sobreposicao_mesma_propriedade(
+    db: AsyncSession, propriedade_id: uuid.UUID, geometria_wkb
+) -> str | None:
+    """RN015 — nome do talhão sobreposto (>10m² de interseção) na mesma
+    propriedade, ou None. Tudo via operadores nativos do PostGIS."""
+    resultado = await db.execute(
+        select(Talhao.nome).where(
+            Talhao.propriedade_id == propriedade_id,
+            ST_Overlaps(Talhao.geometria, geometria_wkb),
+            ST_Area(cast(ST_Intersection(Talhao.geometria, geometria_wkb), Geography))
+            > AREA_MINIMA_SOBREPOSICAO_M2,
+        )
+    )
+    return resultado.scalars().first()
+
+
+async def _buscar_sobreposicao_outra_propriedade(
+    db: AsyncSession, propriedade_id: uuid.UUID, geometria_wkb
+) -> str | None:
+    """RN015 — sobreposição com talhão de OUTRA propriedade é permitida, mas
+    sinalizada (pode ser divisa em disputa, fora do escopo do sistema resolver)."""
+    resultado = await db.execute(
+        select(Talhao.nome).where(
+            Talhao.propriedade_id != propriedade_id,
+            ST_Overlaps(Talhao.geometria, geometria_wkb),
+            ST_Area(cast(ST_Intersection(Talhao.geometria, geometria_wkb), Geography))
+            > AREA_MINIMA_SOBREPOSICAO_M2,
+        )
+    )
+    return resultado.scalars().first()
+
+
+async def _criar_talhao_a_partir_de_poligono(
+    db: AsyncSession,
+    propriedade_id: uuid.UUID,
+    nome: str,
+    poligono,
+    confirmar_fora_do_para: bool,
+) -> tuple[Talhao, str | None]:
+    """Núcleo do cadastro de talhão (RN015, RN016) — reaproveitado pelo
+    cadastro manual (JSON) e pela importação de arquivo (T012)."""
+    if not geometria_valida(poligono):
+        raise AppError(422, "Geometria inválida.")
+
+    if not esta_dentro_do_para(poligono.centroid) and not confirmar_fora_do_para:
+        raise AppError(
+            422,
+            "Talhão fora da área esperada do Pará. Confirme para prosseguir.",
+            {"tipo": "FORA_DO_PARA", "requer_confirmacao": True},
+        )
+
+    geometria_wkb = from_shape(poligono, srid=4326)
+    talhao_sobreposto = await _buscar_sobreposicao_mesma_propriedade(
+        db, propriedade_id, geometria_wkb
+    )
+    if talhao_sobreposto:
+        raise AppError(
+            409,
+            f"Geometria sobrepõe o talhão '{talhao_sobreposto}' na mesma propriedade.",
+            {"tipo": "SOBREPOSICAO"},
+        )
+
+    talhao_outra_propriedade = await _buscar_sobreposicao_outra_propriedade(
+        db, propriedade_id, geometria_wkb
+    )
+    aviso = (
+        f"Geometria sobrepõe o talhão '{talhao_outra_propriedade}' de outra propriedade "
+        "— pode ser uma divisa em disputa; o sistema não bloqueia, mas verifique."
+        if talhao_outra_propriedade
+        else None
+    )
+
+    area_ha = await _calcular_area_ha(db, geometria_wkb)
+    talhao = Talhao(propriedade_id=propriedade_id, nome=nome, geometria=geometria_wkb, area_ha=area_ha)
+    db.add(talhao)
+    await db.commit()
+    await db.refresh(talhao)
+    return talhao, aviso
+
+
+@router.post("")
+async def criar_talhao(
+    payload: TalhaoCreate,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """FR-002/FR-004, RN015, RN016 — cadastro de talhão com validações geométricas."""
+    poligono = shape(payload.geometria)
+    talhao, aviso = await _criar_talhao_a_partir_de_poligono(
+        db, payload.propriedade_id, payload.nome, poligono, payload.confirmar_fora_do_para
+    )
+    return envelope_sucesso((await _serializar(db, talhao, aviso)).model_dump(mode="json"))
+
+
+@router.post("/importar")
+async def importar_talhao(
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    propriedade_id: Annotated[uuid.UUID, Form()],
+    nome: Annotated[str, Form()],
+    arquivo: Annotated[UploadFile, File()],
+    confirmar_fora_do_para: Annotated[bool, Form()] = False,
+) -> dict:
+    """FR-005 — importa o primeiro polígono válido de um GeoJSON, KML ou Shapefile."""
+    conteudo = await arquivo.read()
+    try:
+        poligono = extrair_primeiro_poligono(arquivo.filename or "", conteudo)
+    except ArquivoGeoInvalidoError as exc:
+        raise AppError(422, str(exc)) from exc
+
+    talhao, aviso = await _criar_talhao_a_partir_de_poligono(
+        db, propriedade_id, nome, poligono, confirmar_fora_do_para
+    )
+    return envelope_sucesso((await _serializar(db, talhao, aviso)).model_dump(mode="json"))
+
+
+@router.get("")
+async def listar_talhoes(
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    propriedade_id: uuid.UUID | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> dict:
+    """FR-002, RNF017 — listagem paginada, com filtro opcional por propriedade."""
+    query = select(Talhao)
+    if propriedade_id is not None:
+        query = query.where(Talhao.propriedade_id == propriedade_id)
+
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    resultado = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+    talhoes = resultado.scalars().all()
+    itens = [(await _serializar(db, t)).model_dump(mode="json") for t in talhoes]
+    return envelope_sucesso({"itens": itens, "total": total, "page": page, "page_size": page_size})
+
+
+async def _buscar_talhao_ou_404(db: AsyncSession, talhao_id: uuid.UUID) -> Talhao:
+    talhao = await db.get(Talhao, talhao_id)
+    if talhao is None:
+        raise AppError(404, "Talhão não encontrado.")
+    return talhao
+
+
+@router.get("/{talhao_id}")
+async def obter_talhao(
+    talhao_id: uuid.UUID,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    return envelope_sucesso((await _serializar(db, talhao)).model_dump(mode="json"))
+
+
+@router.delete("/{talhao_id}", status_code=204)
+async def excluir_talhao(
+    talhao_id: uuid.UUID,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """FR-002 — exclusão isolada do talhão (não afeta a propriedade nem outros talhões)."""
+    talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await db.delete(talhao)
+    await db.commit()

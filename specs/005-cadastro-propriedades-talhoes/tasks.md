@@ -8,14 +8,14 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Adicionar dependências `GeoAlchemy2`, `Shapely`, `GeoPandas` (ou `fiona`/`pyshp`), suporte a KML ao projeto
-- [ ] T002 [P] Habilitar extensão PostGIS no banco (`CREATE EXTENSION IF NOT EXISTS postgis;`) via migração
+- [X] T001 Adicionar dependências `GeoAlchemy2`, `Shapely`, `GeoPandas` (ou `fiona`/`pyshp`), suporte a KML ao projeto
+- [X] T002 [P] Habilitar extensão PostGIS no banco (`CREATE EXTENSION IF NOT EXISTS postgis;`) via migração
 
 ## Phase 2: Foundational
 
-- [ ] T003 Criar modelos `Propriedade` e `Talhao` em `app/db/models/` (geometria `Polygon`, SRID 4326) conforme `data-model.md`
-- [ ] T004 [P] Criar migração Alembic com FK `talhoes.propriedade_id -> propriedades.id ON DELETE CASCADE` e índices GiST em `geometria`
-- [ ] T005 [P] Implementar `core/geo/validacao_geometria.py`: funções puras `verifica_sobreposicao(poligono, outros_poligonos)` e `esta_dentro_do_para(centroide)` (Shapely), portadas de `validacaoGeometria.ts`
+- [X] T003 Criar modelos `Propriedade` e `Talhao` em `app/db/models/` (geometria `Polygon`, SRID 4326) conforme `data-model.md`
+- [X] T004 [P] Criar migração Alembic com FK `talhoes.propriedade_id -> propriedades.id ON DELETE CASCADE` e índices GiST em `geometria`
+- [X] T005 [P] Implementar `core/geo/validacao_geometria.py`: funções puras `esta_dentro_do_para(centroide)` e `geometria_valida(poligono)` (Shapely) — a checagem de sobreposição (RN015) é feita via `ST_Overlaps`/`ST_Intersection` no PostGIS (T013), não em Python (Princípio IV da Constituição), diferente do protótipo (`validacaoGeometria.ts`), que faz tudo client-side por não ter backend
 
 **Checkpoint**: schema espacial pronto.
 
@@ -29,11 +29,11 @@
 
 ### Implementation for User Story 1
 
-- [ ] T006 [P] [US1] Implementar schemas Pydantic `PropriedadeCreate`/`PropriedadeRead` em `app/api/v1/endpoints/propriedades.py`
-- [ ] T007 [P] [US1] Implementar schemas Pydantic `TalhaoCreate`/`TalhaoRead` em `app/api/v1/endpoints/talhoes.py`
-- [ ] T008 [US1] Implementar CRUD de `POST/GET/PUT/DELETE /api/v1/propriedades` (contrato em `contracts/talhoes-crud.md`)
-- [ ] T009 [US1] Implementar CRUD de `POST/GET/PUT/DELETE /api/v1/talhoes`, calculando `area_ha` a partir da geometria (`ST_Area` com projeção métrica)
-- [ ] T010 [US1] Registrar as rotas em `app/api/v1/router.py`, protegidas por `Depends(get_current_user)` (feature 001)
+- [X] T006 [P] [US1] Implementar schemas Pydantic `PropriedadeCreate`/`PropriedadeRead` em `app/api/v1/endpoints/propriedades.py`
+- [X] T007 [P] [US1] Implementar schemas Pydantic `TalhaoCreate`/`TalhaoRead` em `app/api/v1/endpoints/talhoes.py`
+- [X] T008 [US1] Implementar CRUD de `POST/GET/PUT/DELETE /api/v1/propriedades` (contrato em `contracts/talhoes-crud.md`)
+- [X] T009 [US1] Implementar CRUD de `POST/GET/PUT/DELETE /api/v1/talhoes`, calculando `area_ha` a partir da geometria (`ST_Area` com projeção métrica)
+- [X] T010 [US1] Registrar as rotas em `app/api/v1/router.py`, protegidas por `Depends(get_current_user)` (feature 001)
 
 **Checkpoint**: CRUD básico funcional, sem ainda as validações de negócio.
 
@@ -47,8 +47,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T011 [P] [US2] Implementar `app/services/importacao_geo_service.py`: parsing de GeoJSON, KML e Shapefile, extraindo o primeiro polígono válido
-- [ ] T012 [US2] Implementar endpoint `POST /api/v1/talhoes/importar` (multipart) reaproveitando o CRUD de talhão do T009
+- [X] T011 [P] [US2] Implementar `app/services/importacao_geo_service.py`: parsing de GeoJSON, KML e Shapefile, extraindo o primeiro polígono válido
+- [X] T012 [US2] Implementar endpoint `POST /api/v1/talhoes/importar` (multipart) reaproveitando o CRUD de talhão do T009
 
 **Checkpoint**: importação funcional para os 3 formatos.
 
@@ -62,9 +62,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] No `POST /talhoes` (T009), antes de persistir: consultar talhões da mesma propriedade via `ST_Overlaps` + `ST_Area(ST_Intersection(...)) > 10`; se sobrepor, retornar 409 (`contracts/talhoes-crud.md`)
-- [ ] T014 [US3] Verificar centroide contra a bounding box aproximada do Pará (`esta_dentro_do_para`, T005); se fora e sem `confirmar_fora_do_para=true`, retornar 422 pedindo confirmação
-- [ ] T015 [US3] Permitir e sinalizar (campo de aviso na resposta) sobreposição entre talhões de propriedades diferentes, sem bloquear
+- [X] T013 [US3] No `POST /talhoes` (T009), antes de persistir: consultar talhões da mesma propriedade via `ST_Overlaps` + `ST_Area(ST_Intersection(...)) > 10`; se sobrepor, retornar 409 (`contracts/talhoes-crud.md`)
+- [X] T014 [US3] Verificar centroide contra a bounding box aproximada do Pará (`esta_dentro_do_para`, T005); se fora e sem `confirmar_fora_do_para=true`, retornar 422 pedindo confirmação
+- [X] T015 [US3] Permitir e sinalizar (campo de aviso na resposta) sobreposição entre talhões de propriedades diferentes, sem bloquear
 
 **Checkpoint**: todas as regras de validação geométrica ativas.
 
@@ -72,10 +72,10 @@
 
 ## Phase Final: Polish
 
-- [ ] T016 [P] Implementar paginação (`page`, `page_size`, default 20) em `GET /propriedades` e `GET /talhoes` (RNF017)
-- [ ] T017 [P] Escrever testes unitários de `validacao_geometria.py` (casos de fronteira de área de sobreposição) em `tests/unit/test_validacao_geometria.py`
-- [ ] T018 [P] Escrever testes de contrato do CRUD em `tests/contract/test_propriedades_crud.py` e `test_talhoes_crud.py`
-- [ ] T019 Rodar os 4 cenários de `quickstart.md`
+- [X] T016 [P] Implementar paginação (`page`, `page_size`, default 20) em `GET /propriedades` e `GET /talhoes` (RNF017)
+- [X] T017 [P] Escrever testes unitários de `validacao_geometria.py` (casos de fronteira de área de sobreposição) em `tests/unit/test_validacao_geometria.py`
+- [X] T018 [P] Escrever testes de contrato do CRUD em `tests/contract/test_propriedades_crud.py` e `test_talhoes_crud.py`
+- [X] T019 Rodar os 4 cenários de `quickstart.md`
 
 ## Dependencies & Execution Order
 
