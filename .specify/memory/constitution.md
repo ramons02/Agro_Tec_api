@@ -1,5 +1,18 @@
 <!--
 Sync Impact Report
+Version change: 1.0.0 → 1.0.1
+Modified principles: n/a
+Added sections: n/a — added one clarifying sentence to "Fluxo de Desenvolvimento e Documentação" about the multi-repo commit boundary (already governed by Project Charter §8)
+Removed sections: none
+Templates requiring updates:
+  ✅ .specify/templates/plan-template.md (no changes needed)
+  ✅ .specify/templates/spec-template.md (no changes needed)
+  ✅ .specify/templates/tasks-template.md (no changes needed)
+  ✅ .specify/templates/commands/*.md (no changes needed)
+Follow-up TODOs: none
+
+---
+Sync Impact Report
 Version change: (none) → 1.0.0
 Modified principles: n/a (initial ratification)
 Added sections: Core Principles (I-V), Restrições Tecnológicas e de Custo, Fluxo de Desenvolvimento e Documentação, Governance
@@ -104,7 +117,12 @@ citam Claude, Anthropic ou qualquer ferramenta de IA como autor ou coautor
 Rationale: manter uma única fonte de verdade evita divergência entre o que foi
 prometido ao dono do produto e o que é implementado; a regra de commits/
 documentação é uma decisão explícita do dono do produto, registrada também na
-Constituição do Projeto (Project Charter) §8.
+Constituição do Projeto (Project Charter) §8. O projeto é dividido em 4
+repositórios (`Agro_Tec_documentacao`, `Agro_Tec_api`, `Agro_Tec_app`,
+`Agro_Tec_infra`), cada um com responsabilidade única — todo commit feito
+neste repositório deve conter apenas mudanças de backend; mudanças de
+frontend, infra/`.env` ou documentação vão para o repositório correspondente,
+nunca commitadas aqui (Project Charter §8).
 
 ## Governance
 
@@ -120,4 +138,4 @@ clarificação de redação. Todo `/speckit-plan` DEVE incluir uma seção
 antes de prosseguir para tasks; complexidade que viole um princípio precisa de
 justificativa explícita registrada no plano.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-03 | **Last Amended**: 2026-09-03
+**Version**: 1.0.1 | **Ratified**: 2026-09-03 | **Last Amended**: 2026-09-03
