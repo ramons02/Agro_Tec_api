@@ -52,6 +52,7 @@ async def test_ingerir_estacao_aciona_fallback_quando_inmet_falha(monkeypatch, e
         evapotranspiracao_mm=4.0,
         umidade_solo_0_7cm=0.3,
         umidade_solo_outras_camadas={},
+        precipitacao_prevista_mm=0.0,
         obtido_em_utc=datetime.now(UTC),
     )
     monkeypatch.setattr(

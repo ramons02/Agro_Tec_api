@@ -14,7 +14,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T001 Add coluna `status_plantio` (enum VERDE/AMARELO/VERMELHO) em `BalancoHidricoDiario` (feature 010) + migracao Alembic
+- [X] T001 Add coluna `status_plantio` (enum VERDE/AMARELO/VERMELHO) em `BalancoHidricoDiario` (feature 010) + migracao Alembic
 
 **Checkpoint**: schema pronto pra carregar status junto do calculo diario.
 
@@ -28,9 +28,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T002 [US1] Implementar `classificar_status(armazenamento_mm, cad_mm, chuva_prevista_mm) -> Enum` em `app/core/calculos/status_plantio.py` (funcao pura, RN004-RN006, fallback conservador ja validado)
-- [ ] T003 [P] [US1] Teste de tabela cobrindo os limiares (30/60/90/95% CAD) em `tests/unit/test_calculos_status_plantio.py`
-- [ ] T004 [US1] Chamar `classificar_status` dentro do job diario da feature 010 (T005 de 010-balanco-hidrico-solo/tasks.md), persistindo `status_plantio` junto
+- [X] T002 [US1] Implementar `classificar_status(armazenamento_mm, cad_mm, chuva_prevista_mm) -> Enum` em `app/core/calculos/status_plantio.py` (funcao pura, RN004-RN006, fallback conservador ja validado)
+- [X] T003 [P] [US1] Teste de tabela cobrindo os limiares (30/60/90/95% CAD) em `tests/unit/test_calculos_status_plantio.py`
+- [X] T004 [US1] Chamar `classificar_status` dentro do job diario da feature 010 (T005 de 010-balanco-hidrico-solo/tasks.md), persistindo `status_plantio` junto
 
 **Checkpoint**: status calculado e persistido diariamente.
 
@@ -44,8 +44,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T005 [US2] Implementar `GET /api/v1/dashboard/plantio?propriedade_id=&status=&page=&page_size=` em `app/api/v1/endpoints/dashboard.py` (contrato em `contracts/dashboard-plantio.md`)
-- [ ] T006 [US2] Aplicar paginacao (20/pagina default, RNF017) e escopo RBAC (feature 014)
+- [X] T005 [US2] Implementar `GET /api/v1/dashboard/plantio?propriedade_id=&status=&page=&page_size=` em `app/api/v1/endpoints/dashboard.py` (contrato em `contracts/dashboard-plantio.md`)
+- [X] T006 [US2] Paginacao aplicada (20/pagina default, RNF017). Escopo RBAC adiado explicitamente para a feature 014 (ainda nao implementada nesta sequencia) — mesmo padrao das demais listagens (propriedades/talhoes) ate la
 
 **Checkpoint**: painel de dados completo, pronto pro `Agro_Tec_app` consumir.
 
@@ -53,8 +53,8 @@
 
 ## Phase Final: Polish
 
-- [ ] T007 Escrever teste de contrato do endpoint com filtros em `tests/contract/`
-- [ ] T008 Rodar Cenarios 1-3 do `quickstart.md`
+- [X] T007 Escrever teste do endpoint com filtros em `tests/integration/test_dashboard_plantio_integration.py` (Postgres real)
+- [X] T008 Rodar Cenarios 1-3 do `quickstart.md`
 
 ## Dependencies & Execution Order
 

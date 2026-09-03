@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.calculos.balanco_hidrico import armazenamento_inicial, calcular_armazenamento
+from app.core.calculos.status_plantio import classificar_status
 from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
 from app.db.models.medicao_clima import MedicaoClima
 from app.db.models.talhao import Talhao
@@ -80,11 +81,14 @@ async def calcular_balanco_hidrico_do_talhao(
         latitude, longitude = await _centroide_lat_long(db, talhao)
         previsao = await obter_previsao(latitude, longitude)
         et0_mm = previsao.evapotranspiracao_mm
+        chuva_prevista_mm = previsao.precipitacao_prevista_mm
     except FontePrevisaoIndisponivelError:
         logger.warning("ET0 indisponível para talhão %s — usando ET0=0 neste ciclo", talhao.id)
         et0_mm = 0.0
+        chuva_prevista_mm = 0.0
 
     armazenamento_mm = calcular_armazenamento(arm_anterior, precipitacao_mm, et0_mm, cad_mm)
+    status_plantio = classificar_status(armazenamento_mm, cad_mm, chuva_prevista_mm)
 
     stmt = (
         pg_insert(BalancoHidricoDiario)
@@ -94,6 +98,7 @@ async def calcular_balanco_hidrico_do_talhao(
             armazenamento_mm=armazenamento_mm,
             precipitacao_mm=precipitacao_mm,
             evapotranspiracao_mm=et0_mm,
+            status_plantio=status_plantio,
         )
         .on_conflict_do_update(
             constraint="uq_balanco_talhao_data",
@@ -101,6 +106,7 @@ async def calcular_balanco_hidrico_do_talhao(
                 "armazenamento_mm": armazenamento_mm,
                 "precipitacao_mm": precipitacao_mm,
                 "evapotranspiracao_mm": et0_mm,
+                "status_plantio": status_plantio,
             },
         )
     )
@@ -112,6 +118,7 @@ async def calcular_balanco_hidrico_do_talhao(
         armazenamento_mm=armazenamento_mm,
         precipitacao_mm=precipitacao_mm,
         evapotranspiracao_mm=et0_mm,
+        status_plantio=status_plantio,
     )
 
 

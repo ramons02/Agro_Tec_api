@@ -9,6 +9,7 @@ from shapely.geometry import shape
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.calculos.status_plantio import StatusPlantio
 from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
 from app.db.models.estacao_inmet import EstacaoInmet
 from app.db.models.medicao_clima import FonteDados, MedicaoClima
@@ -68,7 +69,7 @@ async def talhao_com_cad(pg_session: AsyncSession) -> Talhao:
     return talhao
 
 
-def _mock_previsao(et0_mm: float) -> PrevisaoClimatica:
+def _mock_previsao(et0_mm: float, precipitacao_prevista_mm: float = 0.0) -> PrevisaoClimatica:
     return PrevisaoClimatica(
         latitude=-1.455,
         longitude=-48.495,
@@ -77,6 +78,7 @@ def _mock_previsao(et0_mm: float) -> PrevisaoClimatica:
         evapotranspiracao_mm=et0_mm,
         umidade_solo_0_7cm=0.3,
         umidade_solo_outras_camadas={},
+        precipitacao_prevista_mm=precipitacao_prevista_mm,
         obtido_em_utc=datetime.now(UTC),
     )
 
@@ -135,6 +137,7 @@ async def test_segundo_dia_usa_armazenamento_do_dia_anterior(
             armazenamento_mm=50.0,
             precipitacao_mm=0.0,
             evapotranspiracao_mm=2.0,
+            status_plantio=StatusPlantio.AMARELO,
         )
     )
     await pg_session.commit()
@@ -179,6 +182,7 @@ async def test_armazenamento_nunca_fica_negativo(
             armazenamento_mm=2.0,
             precipitacao_mm=0.0,
             evapotranspiracao_mm=1.0,
+            status_plantio=StatusPlantio.VERMELHO,
         )
     )
     await pg_session.commit()

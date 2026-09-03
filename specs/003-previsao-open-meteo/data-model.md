@@ -12,4 +12,5 @@ Esta feature não introduz tabela persistente própria — os dados obtidos alim
 | `evapotranspiracao_mm` | float | ET0 diária (FAO-56 Penman-Monteith, calculada pela fonte) |
 | `umidade_solo_0_7cm` | float | fração de umidade da camada superficial |
 | `umidade_solo_outras_camadas` | array | demais profundidades retornadas pela fonte |
+| `precipitacao_prevista_mm` | float | chuva prevista para as próximas 24h — adicionado ao consumir esta feature na 011 (RN004 exige "chuva prevista", não a precipitação já medida) |
 | `obtido_em_utc` | timestamp | instante da consulta, para controle de cache/staleness |

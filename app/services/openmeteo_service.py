@@ -32,6 +32,7 @@ class PrevisaoClimatica(BaseModel):
     evapotranspiracao_mm: float
     umidade_solo_0_7cm: float
     umidade_solo_outras_camadas: dict[str, float]
+    precipitacao_prevista_mm: float  # RN004 — chuva prevista p/ próximas 24h (feature 011)
     obtido_em_utc: datetime
 
 
@@ -57,7 +58,7 @@ async def obter_previsao(latitude: float, longitude: float) -> PrevisaoClimatica
         "latitude": latitude,
         "longitude": longitude,
         "hourly": "wind_speed_10m,wind_speed_100m",
-        "daily": "et0_fao_evapotranspiration",
+        "daily": "et0_fao_evapotranspiration,precipitation_sum",
         "hourly_soil": "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm",
         "timezone": "UTC",
     }
@@ -85,6 +86,7 @@ def _parsear_resposta(latitude: float, longitude: float, corpo: dict) -> Previsa
     vento_10m = _primeiro_valor(hourly.get("wind_speed_10m"))
     vento_100m = _primeiro_valor(hourly.get("wind_speed_100m"))
     et0 = _primeiro_valor(daily.get("et0_fao_evapotranspiration"))
+    precipitacao_prevista = _primeiro_valor(daily.get("precipitation_sum"))
     umidade_0_7cm = _primeiro_valor(hourly_soil.get("soil_moisture_0_to_7cm"))
 
     outras_camadas = {
@@ -101,6 +103,7 @@ def _parsear_resposta(latitude: float, longitude: float, corpo: dict) -> Previsa
         evapotranspiracao_mm=et0,
         umidade_solo_0_7cm=umidade_0_7cm,
         umidade_solo_outras_camadas=outras_camadas,
+        precipitacao_prevista_mm=precipitacao_prevista,
         obtido_em_utc=datetime.now(UTC),
     )
 

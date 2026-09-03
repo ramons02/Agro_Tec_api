@@ -10,7 +10,7 @@
   "data_consulta_utc": "...",
   "dados": {
     "itens": [
-      {"talhao_id": "...", "nome": "Talhão Norte", "propriedade": "Fazenda Boa Esperança", "area_ha": 12.4, "tipo_solo": "ARGILOSO", "status_plantio": "VERDE", "umidade_0_7cm_pct": 34.2}
+      {"talhao_id": "...", "nome": "Talhão Norte", "propriedade": "Fazenda Boa Esperança", "area_ha": 12.4, "tipo_solo": "ARGILOSO", "status_plantio": "VERDE", "percentual_cad": 74.5, "armazenamento_mm": 44.7}
     ],
     "total": 87,
     "page": 1,

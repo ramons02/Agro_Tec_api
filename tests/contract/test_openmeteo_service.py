@@ -18,6 +18,7 @@ PAYLOAD_EXEMPLO = {
     },
     "daily": {
         "et0_fao_evapotranspiration": [4.2],
+        "precipitation_sum": [8.5],
     },
 }
 
@@ -54,6 +55,7 @@ async def test_obter_previsao_estrutura_dados_corretamente(monkeypatch):
     assert previsao.vento_10m_kmh == 7.2
     assert previsao.vento_100m_kmh == 12.4
     assert previsao.evapotranspiracao_mm == 4.2
+    assert previsao.precipitacao_prevista_mm == 8.5
     assert previsao.umidade_solo_0_7cm == 0.34
     assert "soil_moisture_7_to_28cm" in previsao.umidade_solo_outras_camadas
 
