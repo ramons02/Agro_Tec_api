@@ -17,6 +17,7 @@ python-dotenv==1.0.1
 httpx==0.28.1
 cachetools==5.5.0
 APScheduler==3.11.0
+aiosmtplib==5.1.2
 pytest==8.3.4
 pytest-asyncio==0.25.0
 aiosqlite==0.20.0

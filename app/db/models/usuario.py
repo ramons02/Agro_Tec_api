@@ -20,6 +20,9 @@ class Usuario(Base):
     __tablename__ = "usuarios"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Feature 013 — nullable porque contas anteriores a essa feature (seeds de
+    # dev, fixtures de teste) não têm nome; sempre exigido no cadastro (FR-001).
+    nome: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     senha_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     papel: Mapped[Papel] = mapped_column(Enum(Papel, name="papel_usuario"), nullable=False)

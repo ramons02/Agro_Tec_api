@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from app.core.security import hash_senha
+from app.db.models.token_recuperacao_senha import TokenRecuperacaoSenha
 from app.db.models.usuario import Papel, Usuario
 from app.db.session import Base, get_db
 from app.main import app
@@ -27,7 +28,9 @@ async def db_session():
         # SQLite (indisponível neste ambiente). Models com geometria (EstacaoInmet,
         # Propriedade, Talhao) são validados contra Postgres+PostGIS real via
         # quickstart.md de cada feature, não por este fixture.
-        await conn.run_sync(Base.metadata.create_all, tables=[Usuario.__table__])
+        await conn.run_sync(
+            Base.metadata.create_all, tables=[Usuario.__table__, TokenRecuperacaoSenha.__table__]
+        )
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:

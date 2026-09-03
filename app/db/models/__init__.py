@@ -4,6 +4,7 @@ from app.db.models.estacao_inmet import EstacaoInmet
 from app.db.models.medicao_clima import FonteDados, MedicaoClima
 from app.db.models.propriedade import Propriedade
 from app.db.models.talhao import Talhao
+from app.db.models.token_recuperacao_senha import TokenRecuperacaoSenha
 from app.db.models.usuario import Papel, Usuario
 from app.db.models.vinculo_agronomo_propriedade import EstadoVinculo, VinculoAgronomoPropriedade
 
@@ -17,6 +18,7 @@ __all__ = [
     "Papel",
     "Propriedade",
     "Talhao",
+    "TokenRecuperacaoSenha",
     "Usuario",
     "VinculoAgronomoPropriedade",
 ]
