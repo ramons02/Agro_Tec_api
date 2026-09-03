@@ -12,17 +12,26 @@ from shapely.geometry import shape
 from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.calculos.pulverizacao import classificar_pulverizacao
+from app.core.calculos.psicrometria import calcular_delta_t
+from app.core.calculos.pulverizacao import (
+    ClassificacaoPulverizacao,
+    classificar_delta_t,
+    classificar_pulverizacao,
+)
 from app.core.calculos.solo import calcular_cad, classificar_textura, estimar_cc_pmp
 from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
 from app.core.response import AppError, envelope_sucesso
 from app.core.security import UsuarioAutenticado, get_current_user
 from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
 from app.db.models.talhao import Talhao, TipoSolo
-from app.db.queries.estacao_proxima import buscar_estacao_mais_proxima
+from app.db.queries.estacao_proxima import buscar_estacoes_mais_proximas
 from app.db.session import get_db
 from app.services.clima_tempo_real_service import obter_clima_atual
-from app.services.importacao_geo_service import ArquivoGeoInvalidoError, extrair_primeiro_poligono
+from app.services.importacao_geo_service import (
+    ArquivoGeoInvalidoError,
+    extrair_geometria,
+    normalizar_para_multipolygon,
+)
 from app.services.soilgrids_service import FonteSoloIndisponivelError, parametrizar_solo
 
 logger = logging.getLogger(__name__)
@@ -158,7 +167,9 @@ async def _criar_talhao_a_partir_de_poligono(
             {"tipo": "FORA_DO_PARA", "requer_confirmacao": True},
         )
 
-    geometria_wkb = from_shape(poligono, srid=4326)
+    # Escopo V3 — coluna é MultiPolygon; um Polygon isolado (desenho manual,
+    # GeoJSON simples) é normalizado para MultiPolygon de uma parte só.
+    geometria_wkb = from_shape(normalizar_para_multipolygon(poligono), srid=4326)
     talhao_sobreposto = await _buscar_sobreposicao_mesma_propriedade(
         db, propriedade_id, geometria_wkb
     )
@@ -214,10 +225,10 @@ async def importar_talhao(
     arquivo: Annotated[UploadFile, File()],
     confirmar_fora_do_para: Annotated[bool, Form()] = False,
 ) -> dict:
-    """FR-005 — importa o primeiro polígono válido de um GeoJSON, KML ou Shapefile."""
+    """FR-005 — importa a geometria (Polygon ou MultiPolygon) de um GeoJSON, KML ou Shapefile."""
     conteudo = await arquivo.read()
     try:
-        poligono = extrair_primeiro_poligono(arquivo.filename or "", conteudo)
+        poligono = extrair_geometria(arquivo.filename or "", conteudo)
     except ArquivoGeoInvalidoError as exc:
         raise AppError(422, str(exc)) from exc
 
@@ -270,16 +281,22 @@ async def obter_estacao_mais_proxima(
     usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """RF015/RF016 (feature 006) — estação INMET mais próxima do talhão."""
+    """RF015/RF016/RF035 (feature 006, Escopo V3) — as 3 estações INMET mais
+    próximas do talhão, usadas na interpolação IDW (calculos-geo-metero.md §1B)."""
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
-    resultado = await buscar_estacao_mais_proxima(db, talhao)
-    if resultado is None:
+    resultados = await buscar_estacoes_mais_proximas(db, talhao)
+    if not resultados:
         raise AppError(404, "Nenhuma estação disponível.")
     return envelope_sucesso(
         {
-            "estacao_codigo": resultado.estacao_codigo,
-            "municipio": resultado.municipio,
-            "distancia_km": resultado.distancia_km,
+            "estacoes": [
+                {
+                    "estacao_codigo": r.estacao_codigo,
+                    "municipio": r.municipio,
+                    "distancia_km": r.distancia_km,
+                }
+                for r in resultados
+            ]
         }
     )
 
@@ -290,21 +307,38 @@ async def obter_pulverizacao(
     usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """RF022/RF023 (feature 009) — classificação da janela de pulverização a
-    partir da leitura de vento mais recente (feature 008) da estação mais
-    próxima (feature 006)."""
+    """RF022/RF023/RF036 (feature 009, Escopo V3) — classificação da janela de
+    pulverização combinando vento (RN001-RN003) e Delta T (RN021/RN022),
+    ambas a partir da leitura mais recente (feature 008/006), checagens
+    independentes e complementares — ver Adendo V3 em REQUISITOS.md."""
     talhao = await _buscar_talhao_ou_404(db, talhao_id)
     clima = await obter_clima_atual(db, talhao)
     if clima is None or clima.vento_kmh is None:
         # T005 — nunca apresenta uma classificação como se fosse válida sem dado.
         raise AppError(404, "Sem leitura de vento disponível para classificar a pulverização.")
 
-    classificacao = classificar_pulverizacao(clima.vento_kmh, clima.rajada_kmh or 0.0)
+    classificacao_vento = classificar_pulverizacao(clima.vento_kmh, clima.rajada_kmh or 0.0)
+
+    classificacao_delta_t = None
+    delta_t_c = None
+    if clima.temperatura_c is not None and clima.umidade_pct is not None:
+        delta_t_c = calcular_delta_t(clima.temperatura_c, clima.umidade_pct)
+        classificacao_delta_t = classificar_delta_t(delta_t_c)
+
+    motivos_bloqueio = [
+        c
+        for c in (classificacao_vento, classificacao_delta_t)
+        if c is not None and c != ClassificacaoPulverizacao.FAVORAVEL
+    ]
+    classificacao_final = motivos_bloqueio[0] if motivos_bloqueio else ClassificacaoPulverizacao.FAVORAVEL
+
     return envelope_sucesso(
         {
-            "classificacao": classificacao.value,
+            "classificacao": classificacao_final.value,
+            "motivos_bloqueio": [c.value for c in motivos_bloqueio],
             "vento_kmh": clima.vento_kmh,
             "rajada_kmh": clima.rajada_kmh,
+            "delta_t_c": round(delta_t_c, 1) if delta_t_c is not None else None,
             "fonte_dados": clima.fonte_dados.value,
         }
     )

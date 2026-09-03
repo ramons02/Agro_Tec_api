@@ -13,6 +13,7 @@ from app.core.response import AppError, envelope_sucesso
 from app.core.security import UsuarioAutenticado, get_current_user
 from app.db.models.propriedade import Propriedade
 from app.db.session import get_db
+from app.services.importacao_geo_service import normalizar_para_multipolygon
 
 router = APIRouter(prefix="/propriedades", tags=["propriedades"])
 
@@ -21,7 +22,7 @@ DEFAULT_PAGE_SIZE = 20
 
 class PropriedadeCreate(BaseModel):
     nome: str
-    geometria: dict[str, Any] | None = None  # GeoJSON Polygon, opcional (RD001)
+    geometria: dict[str, Any] | None = None  # GeoJSON Polygon ou MultiPolygon, opcional (RD001)
 
 
 class PropriedadeRead(BaseModel):
@@ -53,7 +54,11 @@ async def criar_propriedade(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """RF001 (feature 005) — FR-001: criar propriedade."""
-    geometria = from_shape(shape(payload.geometria), srid=4326) if payload.geometria else None
+    geometria = (
+        from_shape(normalizar_para_multipolygon(shape(payload.geometria)), srid=4326)
+        if payload.geometria
+        else None
+    )
     propriedade = Propriedade(nome=payload.nome, proprietario_id=usuario.id, geometria=geometria)
     db.add(propriedade)
     await db.commit()
@@ -105,7 +110,9 @@ async def atualizar_propriedade(
     propriedade = await _buscar_propriedade_ou_404(db, propriedade_id)
     propriedade.nome = payload.nome
     if payload.geometria is not None:
-        propriedade.geometria = from_shape(shape(payload.geometria), srid=4326)
+        propriedade.geometria = from_shape(
+            normalizar_para_multipolygon(shape(payload.geometria)), srid=4326
+        )
     await db.commit()
     await db.refresh(propriedade)
     return envelope_sucesso((await _serializar(db, propriedade)).model_dump(mode="json"))

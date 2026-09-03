@@ -1,6 +1,10 @@
 import pytest
 
-from app.core.calculos.pulverizacao import ClassificacaoPulverizacao, classificar_pulverizacao
+from app.core.calculos.pulverizacao import (
+    ClassificacaoPulverizacao,
+    classificar_delta_t,
+    classificar_pulverizacao,
+)
 
 
 @pytest.mark.parametrize(
@@ -25,3 +29,19 @@ from app.core.calculos.pulverizacao import ClassificacaoPulverizacao, classifica
 )
 def test_classificar_pulverizacao(vento_kmh, rajada_kmh, esperado):
     assert classificar_pulverizacao(vento_kmh, rajada_kmh) == esperado
+
+
+@pytest.mark.parametrize(
+    ("delta_t_c", "esperado"),
+    [
+        (2.0, ClassificacaoPulverizacao.FAVORAVEL),  # fronteira inferior inclusiva
+        (10.0, ClassificacaoPulverizacao.FAVORAVEL),  # fronteira superior inclusiva
+        (6.0, ClassificacaoPulverizacao.FAVORAVEL),
+        (1.9, ClassificacaoPulverizacao.BLOQUEIO_INVERSAO_TERMICA),
+        (0.0, ClassificacaoPulverizacao.BLOQUEIO_INVERSAO_TERMICA),
+        (10.1, ClassificacaoPulverizacao.BLOQUEIO_EVAPORACAO_EXCESSIVA),
+        (15.0, ClassificacaoPulverizacao.BLOQUEIO_EVAPORACAO_EXCESSIVA),
+    ],
+)
+def test_classificar_delta_t(delta_t_c, esperado):
+    assert classificar_delta_t(delta_t_c) == esperado

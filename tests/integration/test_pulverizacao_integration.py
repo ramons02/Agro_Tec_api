@@ -19,6 +19,7 @@ from app.db.models.talhao import Talhao
 from app.db.models.usuario import Papel, Usuario
 from app.db.session import get_db
 from app.main import app
+from app.services.importacao_geo_service import normalizar_para_multipolygon
 from app.services.inmet_service import FonteIndisponivelError
 from app.services.openmeteo_service import FontePrevisaoIndisponivelError
 from tests.integration.conftest import limpar_tabelas
@@ -65,7 +66,7 @@ async def talhao_com_estacao(pg_session: AsyncSession, usuario_dono: Usuario) ->
     talhao = Talhao(
         propriedade_id=propriedade.id,
         nome="Talhão Norte",
-        geometria=from_shape(shape(TALHAO_BELEM), srid=4326),
+        geometria=from_shape(normalizar_para_multipolygon(shape(TALHAO_BELEM)), srid=4326),
         area_ha=1.0,
     )
     pg_session.add(talhao)

@@ -7,7 +7,6 @@ nativos do PostGIS, nunca cálculo aproximado em aplicação). As funções abai
 cobrem apenas validação que não depende de comparar contra dado já persistido.
 """
 
-from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
 # Bounding box aproximada do estado do Pará (WGS 84) — heurística de confirmação
@@ -26,7 +25,16 @@ def esta_dentro_do_para(centroide: BaseGeometry) -> bool:
     )
 
 
-def geometria_valida(poligono: Polygon) -> bool:
-    """Validação estrutural mínima: polígono não vazio, topologicamente simples,
-    com pelo menos 3 vértices distintos (mínimo exigido pelo protótipo/RI008)."""
-    return poligono.is_valid and not poligono.is_empty and len(poligono.exterior.coords) >= 4
+def geometria_valida(geometria: BaseGeometry) -> bool:
+    """Validação estrutural mínima: `Polygon` ou `MultiPolygon` (Escopo V3) não
+    vazio, topologicamente simples, com pelo menos 3 vértices distintos por
+    parte (mínimo exigido pelo protótipo/RI008)."""
+    if not geometria.is_valid or geometria.is_empty:
+        return False
+    if geometria.geom_type == "Polygon":
+        return len(geometria.exterior.coords) >= 4
+    if geometria.geom_type == "MultiPolygon":
+        return len(geometria.geoms) > 0 and all(
+            len(parte.exterior.coords) >= 4 for parte in geometria.geoms
+        )
+    return False

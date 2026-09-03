@@ -16,6 +16,7 @@ class Propriedade(Base):
         Uuid(as_uuid=True), ForeignKey("usuarios.id"), nullable=False
     )
     # Opcional (RD001/spec 005): nem toda propriedade tem perímetro próprio desenhado.
+    # MultiPolygon desde o Escopo V3 (2026-09-03) — era Polygon.
     geometria: Mapped[str | None] = mapped_column(
-        Geometry(geometry_type="POLYGON", srid=4326), nullable=True
+        Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=True
     )

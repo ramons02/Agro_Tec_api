@@ -17,6 +17,7 @@ from app.db.models.talhao import Talhao, TipoSolo
 from app.db.models.usuario import Papel, Usuario
 from app.db.session import get_db
 from app.main import app
+from app.services.importacao_geo_service import normalizar_para_multipolygon
 from tests.integration.conftest import limpar_tabelas
 
 TALHAO_GENERICO = {
@@ -55,7 +56,7 @@ async def _criar_talhao_com_status(
     talhao = Talhao(
         propriedade_id=propriedade_id,
         nome=nome,
-        geometria=from_shape(shape(TALHAO_GENERICO), srid=4326),
+        geometria=from_shape(normalizar_para_multipolygon(shape(TALHAO_GENERICO)), srid=4326),
         area_ha=5.0,
         tipo_solo=TipoSolo.MISTO,
         capacidade_agua_disponivel_mm=60.0,
@@ -162,7 +163,7 @@ async def test_talhao_sem_balanco_calculado_aparece_com_status_nulo(
     talhao = Talhao(
         propriedade_id=propriedade.id,
         nome="Talhão Recém-Cadastrado",
-        geometria=from_shape(shape(TALHAO_GENERICO), srid=4326),
+        geometria=from_shape(normalizar_para_multipolygon(shape(TALHAO_GENERICO)), srid=4326),
         area_ha=3.0,
     )
     pg_session.add(talhao)

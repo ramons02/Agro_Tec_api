@@ -13,9 +13,14 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.calculos.balanco_hidrico import armazenamento_inicial, calcular_armazenamento
+from app.core.calculos.balanco_hidrico import (
+    KC_FASE_INICIAL,
+    armazenamento_inicial,
+    calcular_armazenamento,
+)
 from app.core.calculos.status_plantio import classificar_status
 from app.db.models.balanco_hidrico_diario import BalancoHidricoDiario
+from app.db.models.cultura_kc import CulturaKc
 from app.db.models.medicao_clima import MedicaoClima
 from app.db.models.talhao import Talhao
 from app.db.queries.estacao_proxima import buscar_estacao_mais_proxima
@@ -56,6 +61,28 @@ async def _centroide_lat_long(db: AsyncSession, talhao: Talhao) -> tuple[float, 
     return resultado.one()
 
 
+async def _obter_kc_dinamico(db: AsyncSession, talhao: Talhao, data_alvo: date) -> float:
+    """RD010/RN023 (Escopo V3) — Kc por cultura/DAE, com fallback para o Kc de
+    fase inicial (RN007) quando o talhão não tem cultura/data de plantio
+    cadastrada ou não há linha correspondente em `cultura_kc`."""
+    if talhao.cultura is None or talhao.data_plantio is None:
+        return KC_FASE_INICIAL
+
+    dae = (data_alvo - talhao.data_plantio).days
+    if dae < 0:
+        return KC_FASE_INICIAL
+
+    resultado = await db.execute(
+        select(CulturaKc.kc_valor).where(
+            CulturaKc.cultura == talhao.cultura,
+            CulturaKc.dae_inicio <= dae,
+            CulturaKc.dae_fim >= dae,
+        )
+    )
+    valor = resultado.scalars().first()
+    return float(valor) if valor is not None else KC_FASE_INICIAL
+
+
 async def calcular_balanco_hidrico_do_talhao(
     db: AsyncSession, talhao: Talhao, data_alvo: date | None = None
 ) -> BalancoHidricoDiario | None:
@@ -87,7 +114,8 @@ async def calcular_balanco_hidrico_do_talhao(
         et0_mm = 0.0
         chuva_prevista_mm = 0.0
 
-    armazenamento_mm = calcular_armazenamento(arm_anterior, precipitacao_mm, et0_mm, cad_mm)
+    kc = await _obter_kc_dinamico(db, talhao, data_alvo)
+    armazenamento_mm = calcular_armazenamento(arm_anterior, precipitacao_mm, et0_mm, cad_mm, kc=kc)
     status_plantio = classificar_status(armazenamento_mm, cad_mm, chuva_prevista_mm)
 
     stmt = (

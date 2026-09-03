@@ -1,8 +1,9 @@
 import enum
 import uuid
+from datetime import date
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Uuid
+from sqlalchemy import Date, Enum, ForeignKey, Numeric, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -24,8 +25,10 @@ class Talhao(Base):
         Uuid(as_uuid=True), ForeignKey("propriedades.id", ondelete="CASCADE"), nullable=False
     )
     nome: Mapped[str] = mapped_column(String(50), nullable=False)
+    # MultiPolygon desde o Escopo V3 (2026-09-03) — era Polygon. Permite partes
+    # desconexas do mesmo talhão (ex.: áreas descontínuas da mesma cultura).
     geometria: Mapped[str] = mapped_column(
-        Geometry(geometry_type="POLYGON", srid=4326), nullable=False
+        Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=False
     )
     # Calculada a partir da geometria na criação (ST_Area), nunca informada manualmente.
     area_ha: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False)
@@ -38,3 +41,8 @@ class Talhao(Base):
     fracao_silte_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     materia_organica_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     capacidade_agua_disponivel_mm: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+
+    # Escopo V3 (feature 010, Kc dinâmico) — opcionais: sem cultura/data de
+    # plantio definidas, o Balanço Hídrico cai no Kc de fase inicial (fallback).
+    cultura: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    data_plantio: Mapped[date | None] = mapped_column(Date, nullable=True)

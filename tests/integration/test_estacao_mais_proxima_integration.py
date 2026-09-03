@@ -98,8 +98,9 @@ async def test_retorna_estacao_fisicamente_mais_proxima(
 
     assert resposta.status_code == 200
     dados = resposta.json()["dados"]
-    assert dados["estacao_codigo"] == "A201"
-    assert dados["distancia_km"] < 5  # A201 está a ~1km, A999 a ~800km
+    estacoes = dados["estacoes"]
+    assert estacoes[0]["estacao_codigo"] == "A201"
+    assert estacoes[0]["distancia_km"] < 5  # A201 está a ~1km, A999 a ~800km
 
 
 @pytest.mark.asyncio
@@ -127,6 +128,7 @@ async def test_distancia_bate_com_calculo_geodesico_real(
 
     from app.db.models.propriedade import Propriedade
     from app.db.models.talhao import Talhao
+    from app.services.importacao_geo_service import normalizar_para_multipolygon
 
     propriedade = Propriedade(nome="Fazenda Teste", proprietario_id=usuario_dono.id)
     pg_session.add(propriedade)
@@ -136,7 +138,7 @@ async def test_distancia_bate_com_calculo_geodesico_real(
     talhao = Talhao(
         propriedade_id=propriedade.id,
         nome="Talhão Norte",
-        geometria=from_shape(poligono, srid=4326),
+        geometria=from_shape(normalizar_para_multipolygon(poligono), srid=4326),
         area_ha=1.0,
     )
     pg_session.add(talhao)

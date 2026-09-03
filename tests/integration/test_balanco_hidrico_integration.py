@@ -17,6 +17,7 @@ from app.db.models.propriedade import Propriedade
 from app.db.models.talhao import Talhao, TipoSolo
 from app.db.models.usuario import Papel, Usuario
 from app.services import balanco_hidrico_service
+from app.services.importacao_geo_service import normalizar_para_multipolygon
 from app.services.openmeteo_service import PrevisaoClimatica
 from tests.integration.conftest import limpar_tabelas
 
@@ -58,7 +59,7 @@ async def talhao_com_cad(pg_session: AsyncSession) -> Talhao:
     talhao = Talhao(
         propriedade_id=propriedade.id,
         nome="Talhão Norte",
-        geometria=from_shape(shape(TALHAO_BELEM), srid=4326),
+        geometria=from_shape(normalizar_para_multipolygon(shape(TALHAO_BELEM)), srid=4326),
         area_ha=1.0,
         tipo_solo=TipoSolo.MISTO,
         capacidade_agua_disponivel_mm=60.0,
@@ -209,6 +210,50 @@ async def test_talhao_sem_cad_nao_calcula(pg_session: AsyncSession, talhao_com_c
     )
 
     assert resultado is None
+
+
+@pytest.mark.asyncio
+async def test_kc_dinamico_usado_quando_cultura_e_dae_tem_linha_correspondente(
+    pg_session: AsyncSession, talhao_com_cad: Talhao, monkeypatch
+):
+    from app.db.models.cultura_kc import CulturaKc
+
+    hoje = date.today()
+    talhao_com_cad.cultura = "SOJA"
+    talhao_com_cad.data_plantio = hoje - timedelta(days=10)
+    pg_session.add(
+        CulturaKc(cultura="SOJA", fase_fenologica="inicial", dae_inicio=0, dae_fim=20, kc_valor=0.9)
+    )
+    await pg_session.commit()
+
+    await _adicionar_chuva(pg_session, mm=5.0)
+    monkeypatch.setattr(
+        balanco_hidrico_service, "obter_previsao", AsyncMock(return_value=_mock_previsao(et0_mm=3.0))
+    )
+
+    resultado = await balanco_hidrico_service.calcular_balanco_hidrico_do_talhao(
+        pg_session, talhao_com_cad
+    )
+
+    # ARM_0 = 42; Kc=0.9 -> ET_real=2.7; 42+5-2.7 = 44.3
+    assert resultado.armazenamento_mm == pytest.approx(44.3)
+
+
+@pytest.mark.asyncio
+async def test_kc_fixo_quando_talhao_sem_cultura_ou_data_plantio(
+    pg_session: AsyncSession, talhao_com_cad: Talhao, monkeypatch
+):
+    await _adicionar_chuva(pg_session, mm=5.0)
+    monkeypatch.setattr(
+        balanco_hidrico_service, "obter_previsao", AsyncMock(return_value=_mock_previsao(et0_mm=3.0))
+    )
+
+    resultado = await balanco_hidrico_service.calcular_balanco_hidrico_do_talhao(
+        pg_session, talhao_com_cad
+    )
+
+    # sem cultura/data_plantio -> fallback Kc=0.4: ARM_0=42; ET_real=1.2; 42+5-1.2=45.8
+    assert resultado.armazenamento_mm == pytest.approx(45.8)
 
 
 @pytest.mark.asyncio
