@@ -17,8 +17,13 @@ down_revision: str | None = None
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
+# create_type=False: criado explicitamente abaixo, evita CREATE TYPE duplicado pelo create_table
 papel_usuario = postgresql.ENUM(
-    "PRODUTOR_RURAL", "AGRONOMO", "GESTOR_TECNOLOGIA", name="papel_usuario"
+    "PRODUTOR_RURAL",
+    "AGRONOMO",
+    "GESTOR_TECNOLOGIA",
+    name="papel_usuario",
+    create_type=False,
 )
 
 

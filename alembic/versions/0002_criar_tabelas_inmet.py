@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from geoalchemy2 import Geometry
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -17,10 +18,14 @@ down_revision: str | None = "0001"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
-fonte_dados_medicao = sa.Enum("AO_VIVO", "CACHE_EXPIRADO", name="fonte_dados_medicao")
+fonte_dados_medicao = postgresql.ENUM(
+    "AO_VIVO", "CACHE_EXPIRADO", name="fonte_dados_medicao", create_type=False
+)
 
 
 def upgrade() -> None:
+    # Requer superuser (ou role com CREATEDB+privilégio de extensão) na primeira vez;
+    # em ambientes gerenciados normalmente já é habilitado pelo DBA antes do deploy.
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
 
     op.create_table(
@@ -57,7 +62,8 @@ def upgrade() -> None:
         "medicoes_clima",
         ["estacao_codigo", sa.text("data_hora_utc DESC")],
     )
-    op.create_index("idx_estacoes_inmet_posicao", "estacoes_inmet", ["posicao"], postgresql_using="gist")
+    # GeoAlchemy2 já cria o índice GiST de "posicao" automaticamente ao criar a
+    # tabela (Geometry.spatial_index=True por padrão) — sem necessidade de índice manual.
 
 
 def downgrade() -> None:
