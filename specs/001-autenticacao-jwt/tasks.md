@@ -68,7 +68,7 @@
 - [X] T018 [P] Escrever testes unitários de `security.py` (hash, criação e validação de token, incluindo expiração) em `tests/unit/test_security.py`
 - [X] T019 [P] Escrever teste de contrato de `/auth/login` em `tests/contract/test_auth_login.py`
 - [X] T020 Rodar todos os cenários de `quickstart.md` manualmente para validação final
-- [X] T021 Confirmar que nenhum segredo (`JWT_SECRET`) está commitado — apenas em `.env.example` com valor de placeholder
+- [X] T021 Confirmar que nenhum segredo (`JWT_SECRET`) está commitado — placeholder movido para `Agro_Tec_infra/api.env.example` (separação de repositórios definida pelo usuário em 2026-09-03)
 
 ## Dependencies & Execution Order
 
