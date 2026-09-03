@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -18,7 +19,13 @@ from app.core.calculos.pulverizacao import (
     classificar_delta_t,
     classificar_pulverizacao,
 )
+from app.core.calculos.recomendacao import (
+    TendenciaUmidade,
+    calcular_tendencia_umidade,
+    gerar_recomendacao,
+)
 from app.core.calculos.solo import calcular_cad, classificar_textura, estimar_cc_pmp
+from app.core.calculos.status_plantio import StatusPlantio
 from app.core.geo.validacao_geometria import esta_dentro_do_para, geometria_valida
 from app.core.response import AppError, envelope_sucesso
 from app.core.security import (
@@ -330,22 +337,15 @@ async def obter_estacao_mais_proxima(
     )
 
 
-@router.get("/{talhao_id}/pulverizacao")
-async def obter_pulverizacao(
-    talhao_id: uuid.UUID,
-    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """RF022/RF023/RF036 (feature 009, Escopo V3) — classificação da janela de
-    pulverização combinando vento (RN001-RN003) e Delta T (RN021/RN022),
-    ambas a partir da leitura mais recente (feature 008/006), checagens
-    independentes e complementares — ver Adendo V3 em REQUISITOS.md."""
-    talhao = await _buscar_talhao_ou_404(db, talhao_id)
-    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
-    clima = await obter_clima_atual(db, talhao)
+async def _classificar_pulverizacao_do_clima(
+    clima,
+) -> tuple[ClassificacaoPulverizacao | None, list[ClassificacaoPulverizacao], float | None]:
+    """Núcleo de RF022/RF023/RF036 (feature 009, Escopo V3) — combina vento
+    (RN001-RN003) e Delta T (RN021/RN022), checagens independentes e
+    complementares. Reaproveitado por `/pulverizacao` e `/recomendacao`
+    (feature 012). Retorna `(None, [], None)` quando não há leitura de vento."""
     if clima is None or clima.vento_kmh is None:
-        # T005 — nunca apresenta uma classificação como se fosse válida sem dado.
-        raise AppError(404, "Sem leitura de vento disponível para classificar a pulverização.")
+        return None, [], None
 
     classificacao_vento = classificar_pulverizacao(clima.vento_kmh, clima.rajada_kmh or 0.0)
 
@@ -361,6 +361,26 @@ async def obter_pulverizacao(
         if c is not None and c != ClassificacaoPulverizacao.FAVORAVEL
     ]
     classificacao_final = motivos_bloqueio[0] if motivos_bloqueio else ClassificacaoPulverizacao.FAVORAVEL
+    return classificacao_final, motivos_bloqueio, delta_t_c
+
+
+@router.get("/{talhao_id}/pulverizacao")
+async def obter_pulverizacao(
+    talhao_id: uuid.UUID,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """RF022/RF023/RF036 (feature 009, Escopo V3) — classificação da janela de
+    pulverização combinando vento (RN001-RN003) e Delta T (RN021/RN022),
+    ambas a partir da leitura mais recente (feature 008/006), checagens
+    independentes e complementares — ver Adendo V3 em REQUISITOS.md."""
+    talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
+    clima = await obter_clima_atual(db, talhao)
+    classificacao_final, motivos_bloqueio, delta_t_c = await _classificar_pulverizacao_do_clima(clima)
+    if classificacao_final is None:
+        # T005 — nunca apresenta uma classificação como se fosse válida sem dado.
+        raise AppError(404, "Sem leitura de vento disponível para classificar a pulverização.")
 
     return envelope_sucesso(
         {
@@ -370,6 +390,75 @@ async def obter_pulverizacao(
             "rajada_kmh": clima.rajada_kmh,
             "delta_t_c": round(delta_t_c, 1) if delta_t_c is not None else None,
             "fonte_dados": clima.fonte_dados.value,
+        }
+    )
+
+
+async def _status_plantio_e_armazenamento_recente(
+    db: AsyncSession, talhao_id: uuid.UUID
+) -> tuple[StatusPlantio | None, float | None, object | None]:
+    """Registro de balanço hídrico mais recente (feature 010/011) — igual à
+    referência usada pelo dashboard, não necessariamente "hoje" no calendário
+    (o job diário pode não ter rodado ainda)."""
+    resultado = await db.execute(
+        select(BalancoHidricoDiario)
+        .where(BalancoHidricoDiario.talhao_id == talhao_id)
+        .order_by(BalancoHidricoDiario.data.desc())
+        .limit(1)
+    )
+    registro = resultado.scalars().first()
+    if registro is None:
+        return None, None, None
+    return registro.status_plantio, float(registro.armazenamento_mm), registro.data
+
+
+async def _armazenamento_em(db: AsyncSession, talhao_id: uuid.UUID, data) -> float | None:
+    resultado = await db.execute(
+        select(BalancoHidricoDiario.armazenamento_mm).where(
+            BalancoHidricoDiario.talhao_id == talhao_id, BalancoHidricoDiario.data == data
+        )
+    )
+    valor = resultado.scalar_one_or_none()
+    return float(valor) if valor is not None else None
+
+
+@router.get("/{talhao_id}/recomendacao")
+async def obter_recomendacao(
+    talhao_id: uuid.UUID,
+    usuario: Annotated[UsuarioAutenticado, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Feature 012 (FR-001-FR-007) — combina status de plantio (010/011) e
+    pulverização (009/008) numa recomendação única; tendência de umidade
+    (RN019) só entra no texto quando o status é Amarelo (FR-005), calculada a
+    partir do `armazenamento_mm` real dos últimos 3 dias — nunca inventado."""
+    talhao = await _buscar_talhao_ou_404(db, talhao_id)
+    await _verificar_talhao_visivel_ou_404(db, usuario, talhao)
+
+    status_plantio, armazenamento_recente, data_recente = await _status_plantio_e_armazenamento_recente(
+        db, talhao_id
+    )
+
+    tendencia = TendenciaUmidade.ESTAVEL
+    cad_mm = talhao.capacidade_agua_disponivel_mm
+    if status_plantio == StatusPlantio.AMARELO and armazenamento_recente is not None and cad_mm:
+        armazenamento_3dias_atras = await _armazenamento_em(
+            db, talhao_id, data_recente - timedelta(days=3)
+        )
+        if armazenamento_3dias_atras is not None:
+            tendencia = calcular_tendencia_umidade(
+                armazenamento_recente, armazenamento_3dias_atras, float(cad_mm)
+            )
+
+    clima = await obter_clima_atual(db, talhao)
+    classificacao_pulverizacao, _motivos, _delta_t = await _classificar_pulverizacao_do_clima(clima)
+
+    recomendacao = gerar_recomendacao(status_plantio, classificacao_pulverizacao, tendencia)
+    return envelope_sucesso(
+        {
+            "texto": recomendacao.texto,
+            "prioridade": recomendacao.prioridade.value,
+            "aviso": recomendacao.aviso,
         }
     )
 
