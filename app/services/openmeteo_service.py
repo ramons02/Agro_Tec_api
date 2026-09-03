@@ -57,9 +57,12 @@ async def obter_previsao(latitude: float, longitude: float) -> PrevisaoClimatica
     parametros = {
         "latitude": latitude,
         "longitude": longitude,
-        "hourly": "wind_speed_10m,wind_speed_100m",
+        # Open-Meteo devolve todas as variáveis horárias num único objeto "hourly"
+        # — não existe um "hourly_soil" separado na resposta real da API.
+        "hourly": (
+            "wind_speed_10m,wind_speed_100m,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm"
+        ),
         "daily": "et0_fao_evapotranspiration,precipitation_sum",
-        "hourly_soil": "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm",
         "timezone": "UTC",
     }
     try:
@@ -78,21 +81,23 @@ async def obter_previsao(latitude: float, longitude: float) -> PrevisaoClimatica
     return previsao
 
 
+_CAMPOS_HOURLY_NAO_SOLO = {"time", "wind_speed_10m", "wind_speed_100m", "soil_moisture_0_to_7cm"}
+
+
 def _parsear_resposta(latitude: float, longitude: float, corpo: dict) -> PrevisaoClimatica:
     hourly = corpo.get("hourly", {})
-    hourly_soil = corpo.get("hourly_soil", corpo.get("hourly", {}))
     daily = corpo.get("daily", {})
 
     vento_10m = _primeiro_valor(hourly.get("wind_speed_10m"))
     vento_100m = _primeiro_valor(hourly.get("wind_speed_100m"))
     et0 = _primeiro_valor(daily.get("et0_fao_evapotranspiration"))
     precipitacao_prevista = _primeiro_valor(daily.get("precipitation_sum"))
-    umidade_0_7cm = _primeiro_valor(hourly_soil.get("soil_moisture_0_to_7cm"))
+    umidade_0_7cm = _primeiro_valor(hourly.get("soil_moisture_0_to_7cm"))
 
     outras_camadas = {
         chave: _primeiro_valor(valores)
-        for chave, valores in hourly_soil.items()
-        if chave != "soil_moisture_0_to_7cm"
+        for chave, valores in hourly.items()
+        if chave not in _CAMPOS_HOURLY_NAO_SOLO
     }
 
     return PrevisaoClimatica(

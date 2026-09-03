@@ -2,9 +2,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
+from app.core.config import get_settings
 from app.core.response import AppError, app_error_handler, envelope_erro
 from app.core.scheduler import iniciar_scheduler, parar_scheduler
 
@@ -17,6 +19,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AgroClima Pará API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(api_router)
 app.add_exception_handler(AppError, app_error_handler)
 

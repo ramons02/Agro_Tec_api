@@ -8,11 +8,13 @@ from app.services.openmeteo_service import (
 )
 
 PAYLOAD_EXEMPLO = {
+    # Formato real da Open-Meteo: todas as variáveis horárias num único objeto
+    # "hourly" (não há "hourly_soil" separado — ver bug corrigido em
+    # openmeteo_service._parsear_resposta).
     "hourly": {
+        "time": ["2026-09-03T00:00", "2026-09-03T01:00"],
         "wind_speed_10m": [7.2, 8.1],
         "wind_speed_100m": [12.4, 13.0],
-    },
-    "hourly_soil": {
         "soil_moisture_0_to_7cm": [0.34, 0.33],
         "soil_moisture_7_to_28cm": [0.29, 0.28],
     },
@@ -58,6 +60,8 @@ async def test_obter_previsao_estrutura_dados_corretamente(monkeypatch):
     assert previsao.precipitacao_prevista_mm == 8.5
     assert previsao.umidade_solo_0_7cm == 0.34
     assert "soil_moisture_7_to_28cm" in previsao.umidade_solo_outras_camadas
+    assert "time" not in previsao.umidade_solo_outras_camadas
+    assert "wind_speed_10m" not in previsao.umidade_solo_outras_camadas
 
 
 @pytest.mark.asyncio
