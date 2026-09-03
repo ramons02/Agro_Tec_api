@@ -8,9 +8,9 @@
 
 ## Profundidade de raízes ($z$) para a fórmula da CAD
 
-- **Decision**: valor padrão de 300mm (fase inicial de germinação/desenvolvimento radicular raso) quando não informado.
-- **Rationale**: consistente com a camada de germinação (0-7cm a 0-30cm) referenciada nas HUs de Balanço Hídrico; documentado como assunção em `spec.md`.
-- **Alternatives considered**: exigir que o usuário informe a cultura/profundidade — adiado para uma iteração futura, fora do escopo do MVP.
+- **Decision**: valor padrão de 200mm quando não informado — é exatamente o exemplo dado em `escopo/calculos-geo-metero.md` §4A ("z: Profundidade das raízes da cultura, ex: 200mm para fase inicial de germinação").
+- **Rationale**: usar o próprio valor de exemplo do documento oficial evita introduzir um número arbitrário divergente sem necessidade; mantém rastreabilidade direta à fonte.
+- **Alternatives considered**: 300mm (chegou a ser cogitado por analogia à camada de germinação 0-30cm, mas não tem base no documento oficial — descartado em favor do exemplo já dado); exigir que o usuário informe a cultura/profundidade — adiado para uma iteração futura, fora do escopo do MVP.
 
 ## Cobertura geográfica do SoilGrids
 

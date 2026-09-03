@@ -43,7 +43,7 @@
 ### Implementation for User Story 2
 
 - [ ] T006 [P] [US2] Implementar `calcular_cad(cc, pmp, densidade_solo, profundidade_mm)` em `app/core/calculos/solo.py` (função pura, fórmula RN020)
-- [ ] T007 [US2] Usar profundidade padrão de 300mm (ver research.md) quando não informada
+- [ ] T007 [US2] Usar profundidade padrão de 200mm (ver research.md, exemplo oficial de `calculos-geo-metero.md` §4A) quando não informada
 - [ ] T008 [US2] Persistir `capacidade_agua_disponivel_mm` no talhão junto com a classificação de textura (mesma transação do T005)
 
 **Checkpoint**: talhão criado já possui tipo de solo e CAD, prontos para o Balanço Hídrico (feature 010).

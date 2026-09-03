@@ -15,3 +15,9 @@
 
 - **Decision**: retornar a última medição válida com `fonte_dados: "CACHE_EXPIRADO"` e HTTP 200 (não um erro), conforme RN017.
 - **Rationale**: requisito explícito já validado — nunca um erro bloqueante para o usuário final.
+
+## Conversão de unidade de vento (m/s → km/h)
+
+- **Decision**: `medicoes_clima` persiste vento e rajada em m/s (unidade nativa do INMET, conforme schema oficial do Escopo Técnico); esta feature converte para km/h ($v_{km/h} = v_{m/s} \times 3,6$, `calculos-geo-metero.md` §2) no momento de montar a resposta de `/clima/atual`, antes de repassar o valor a qualquer consumidor (mapa, motor de pulverização).
+- **Rationale**: mantém a tabela fiel à unidade original da fonte (boa prática de auditoria/rastreabilidade), e centraliza a conversão em um único ponto de leitura, evitando que cada feature consumidora (007, 009) reimplemente a mesma multiplicação por 3,6 de forma potencialmente inconsistente.
+- **Alternatives considered**: persistir já em km/h — descartado por divergir do schema oficial do Escopo Técnico (`vento_velocidade_ms`, `vento_rajada_ms`) sem necessidade.

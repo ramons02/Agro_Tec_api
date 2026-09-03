@@ -26,7 +26,8 @@
 - [ ] T003 [US1] Se medição ≤30min: retornar direto com `fonte_dados="AO_VIVO"`
 - [ ] T004 [US1] Se medição >30min: adquirir lock da estação, disparar busca imediata (INMET com fallback Open-Meteo, reaproveitando `inmet_service`/`openmeteo_service`), persistir e retornar
 - [ ] T005 [US1] Se todas as fontes falharem: retornar última medição válida com `fonte_dados="CACHE_EXPIRADO"` (RN017), nunca erro
-- [ ] T006 [US1] Implementar endpoint `GET /api/v1/clima/atual?talhao_id=&_t=` aplicando headers `Cache-Control: no-cache, no-store, must-revalidate` e `Pragma: no-cache` (contrato em `contracts/clima-atual.md`)
+- [ ] T005b [US1] Implementar `converter_ms_para_kmh(velocidade_ms) -> float` (×3,6, `calculos-geo-metero.md` §2) em `app/core/calculos/pulverizacao.py` (mesmo módulo da feature 009) e aplicar a `vento_velocidade_ms`/`vento_rajada_ms` antes de montar a resposta — ver research.md
+- [ ] T006 [US1] Implementar endpoint `GET /api/v1/clima/atual?talhao_id=&_t=` aplicando headers `Cache-Control: no-cache, no-store, must-revalidate` e `Pragma: no-cache` (contrato em `contracts/clima-atual.md`), retornando `vento_kmh`/`rajada_kmh` já convertidos
 
 **Checkpoint**: feature completa — história única.
 
