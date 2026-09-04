@@ -82,10 +82,11 @@ async def ingerir_estacao(db: AsyncSession, estacao: EstacaoInmet) -> str:
         try:
             latitude, longitude = await _coordenadas_estacao(db, estacao)
             previsao = await openmeteo_service.obter_previsao(latitude, longitude)
-        except FontePrevisaoIndisponivelError:
+        except FontePrevisaoIndisponivelError as erro_openmeteo:
             logger.error(
-                "Fallback também falhou para estacao=%s — sem medicao neste ciclo",
+                "Fallback também falhou para estacao=%s — sem medicao neste ciclo. causa=%r",
                 estacao.codigo,
+                erro_openmeteo.__cause__ or erro_openmeteo,
             )
             return "falha_total"
 
