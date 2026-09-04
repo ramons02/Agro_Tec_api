@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 INMET_BASE_URL = "https://apitempo.inmet.gov.br"
 TIMEOUT_SEGUNDOS = 3.0  # RN009 — timeout aciona fallback (feature 003)
 
+# A apitempo do INMET fecha a conexao (RST) para requisicoes com o
+# User-Agent padrao de bibliotecas HTTP (httpx/curl); exige algo que
+# pareca vir de um navegador.
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    )
+}
+
 
 class FonteIndisponivelError(Exception):
     """Levantada quando o INMET não responde em TIMEOUT_SEGUNDOS ou retorna erro."""
@@ -46,7 +56,7 @@ class MedicaoInmetDTO:
 
 async def buscar_estacoes_pa() -> list[EstacaoInmetDTO]:
     """Catálogo de estações automáticas (`T`), filtrado para o estado do Pará."""
-    async with httpx.AsyncClient(timeout=TIMEOUT_SEGUNDOS) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT_SEGUNDOS, headers=_HEADERS) as client:
         try:
             resposta = await client.get(f"{INMET_BASE_URL}/estacoes/T")
             resposta.raise_for_status()
@@ -75,7 +85,7 @@ async def buscar_estacoes_pa() -> list[EstacaoInmetDTO]:
 
 async def buscar_medicao_recente(codigo_estacao: str) -> MedicaoInmetDTO | None:
     """Última medição horária disponível para a estação, ou None se não houver leitura válida."""
-    async with httpx.AsyncClient(timeout=TIMEOUT_SEGUNDOS) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT_SEGUNDOS, headers=_HEADERS) as client:
         try:
             resposta = await client.get(f"{INMET_BASE_URL}/estacao/dados/{codigo_estacao}")
             resposta.raise_for_status()

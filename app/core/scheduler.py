@@ -50,11 +50,13 @@ async def _job_balanco_hidrico_diario() -> None:
 
 
 def iniciar_scheduler() -> None:
+    agora = datetime.now(UTC)
     scheduler.add_job(
         _job_ingestao_periodica,
         IntervalTrigger(minutes=10),
         id="ingestao_inmet_periodica",
         replace_existing=True,
+        next_run_time=agora,
     )
     scheduler.add_job(
         _job_retencao_diaria,
@@ -67,6 +69,7 @@ def iniciar_scheduler() -> None:
         IntervalTrigger(days=1),
         id="balanco_hidrico_diario",
         replace_existing=True,
+        next_run_time=agora,
     )
     scheduler.start()
 
