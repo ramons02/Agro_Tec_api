@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -46,6 +47,33 @@ def contador_chamadas_reais() -> int:
     return _contador_chamadas_reais
 
 
+async def _chamar_com_retry_em_429(
+    parametros: dict[str, str | float], latitude: float, longitude: float
+) -> dict:
+    """Uma única repetição com espera curta: 429 aqui normalmente é uma janela de
+    limite compartilhada entre todas as estações do mesmo ciclo de ingestão, não um
+    erro isolado — uma segunda tentativa após alguns segundos costuma já passar."""
+    ultimo_erro: Exception | None = None
+    for tentativa, espera_antes_segundos in enumerate((0.0, 5.0)):
+        if espera_antes_segundos:
+            await asyncio.sleep(espera_antes_segundos)
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT_SEGUNDOS) as client:
+                resposta = await client.get(OPENMETEO_URL, params=parametros)
+                resposta.raise_for_status()
+                return resposta.json()
+        except (httpx.TimeoutException, httpx.HTTPError) as exc:
+            ultimo_erro = exc
+            eh_429 = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
+            if not eh_429 or tentativa == 1:
+                raise FontePrevisaoIndisponivelError(
+                    f"Open-Meteo indisponível para ({latitude}, {longitude})"
+                ) from exc
+    raise FontePrevisaoIndisponivelError(
+        f"Open-Meteo indisponível para ({latitude}, {longitude})"
+    ) from ultimo_erro
+
+
 async def obter_previsao(latitude: float, longitude: float) -> PrevisaoClimatica:
     """RF006/RF007 — previsão de vento (10m/100m), ET0 e umidade do solo em 4 profundidades."""
     global _contador_chamadas_reais
@@ -65,15 +93,7 @@ async def obter_previsao(latitude: float, longitude: float) -> PrevisaoClimatica
         "daily": "et0_fao_evapotranspiration,precipitation_sum",
         "timezone": "UTC",
     }
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_SEGUNDOS) as client:
-            resposta = await client.get(OPENMETEO_URL, params=parametros)
-            resposta.raise_for_status()
-            corpo = resposta.json()
-    except (httpx.TimeoutException, httpx.HTTPError) as exc:
-        raise FontePrevisaoIndisponivelError(
-            f"Open-Meteo indisponível para ({latitude}, {longitude})"
-        ) from exc
+    corpo = await _chamar_com_retry_em_429(parametros, latitude, longitude)
 
     _contador_chamadas_reais += 1
     previsao = _parsear_resposta(latitude, longitude, corpo)
