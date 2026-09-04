@@ -12,6 +12,9 @@ class Propriedade(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Nullable (propriedades ja existentes antes desta coluna); novas propriedades
+    # sempre enviam municipio (PropriedadeCreate exige), usado para busca/filtro.
+    municipio: Mapped[str | None] = mapped_column(String(100), nullable=True)
     proprietario_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("usuarios.id"), nullable=False
     )

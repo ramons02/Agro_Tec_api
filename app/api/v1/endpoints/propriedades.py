@@ -29,12 +29,14 @@ DEFAULT_PAGE_SIZE = 20
 
 class PropriedadeCreate(BaseModel):
     nome: str
+    municipio: str | None = None  # obrigatorio na UI (busca por cidade), opcional na API
     geometria: dict[str, Any] | None = None  # GeoJSON Polygon ou MultiPolygon, opcional (RD001)
 
 
 class PropriedadeRead(BaseModel):
     id: uuid.UUID
     nome: str
+    municipio: str | None
     proprietario_id: uuid.UUID
     geometria: dict[str, Any] | None
 
@@ -49,6 +51,7 @@ async def _serializar(db: AsyncSession, propriedade: Propriedade) -> Propriedade
     return PropriedadeRead(
         id=propriedade.id,
         nome=propriedade.nome,
+        municipio=propriedade.municipio,
         proprietario_id=propriedade.proprietario_id,
         geometria=geometria_geojson,
     )
@@ -70,7 +73,12 @@ async def criar_propriedade(
         if payload.geometria
         else None
     )
-    propriedade = Propriedade(nome=payload.nome, proprietario_id=usuario.id, geometria=geometria)
+    propriedade = Propriedade(
+        nome=payload.nome,
+        municipio=payload.municipio,
+        proprietario_id=usuario.id,
+        geometria=geometria,
+    )
     db.add(propriedade)
     await db.commit()
     await db.refresh(propriedade)
@@ -142,6 +150,7 @@ async def atualizar_propriedade(
     await verificar_dono_ou_gestor(db, usuario, propriedade_id)
     propriedade = await _buscar_propriedade_ou_404(db, propriedade_id)
     propriedade.nome = payload.nome
+    propriedade.municipio = payload.municipio
     if payload.geometria is not None:
         propriedade.geometria = from_shape(
             normalizar_para_multipolygon(shape(payload.geometria)), srid=4326
