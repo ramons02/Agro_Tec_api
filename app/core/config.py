@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
     cors_origins: list[str] = ["http://localhost:5180"]
+    cors_origin_regex: str | None = None
 
     # Feature 013 — recuperação de senha. SMTP_* ausente (padrão) faz o envio
     # cair para o log em vez de uma tentativa real de conexão (Princípio II —
