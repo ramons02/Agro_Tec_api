@@ -5,7 +5,7 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/agroclima_java_dev}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/agroclima_dev?currentSchema=java,public}
     username: ${DATABASE_USER:ramon}
     password: ${DATABASE_PASSWORD}
   jpa:
@@ -14,6 +14,12 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+    schemas: java
+    default-schema: java
+    create-schemas: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
 
 app:
   jwt:
