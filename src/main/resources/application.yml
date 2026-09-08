@@ -14,9 +14,11 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
-    schemas: java
-    default-schema: java
-    create-schemas: true
+    schemas: ${SPRING_FLYWAY_SCHEMAS:java}
+    default-schema: ${SPRING_FLYWAY_DEFAULT_SCHEMA:java}
+    create-schemas: ${SPRING_FLYWAY_CREATE_SCHEMAS:true}
+    baseline-on-migrate: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:false}
+    baseline-version: ${SPRING_FLYWAY_BASELINE_VERSION:1}
   jackson:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
