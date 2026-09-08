@@ -11,11 +11,6 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Entidade adiantada da Fase 7 (so o suficiente pra AutorizacaoService funcionar de
- * verdade na Fase 5) -- o fluxo de convite/aceite (VinculoService/VinculoController)
- * continua pendente pra Fase 7.
- */
 @Entity
 @Table(name = "vinculos_agronomo_propriedade")
 public class VinculoAgronomoPropriedade extends BaseModel<UUID> {
@@ -47,6 +42,11 @@ public class VinculoAgronomoPropriedade extends BaseModel<UUID> {
         this.propriedadeId = propriedadeId;
         this.estado = EstadoVinculo.CONVIDADO;
         this.convidadoEm = Instant.now();
+    }
+
+    public void aceitar(Instant agora) {
+        this.estado = EstadoVinculo.ACEITO;
+        this.aceitoEm = agora;
     }
 
     @Override

@@ -13,6 +13,12 @@ public interface MedicaoClimaRepository extends JpaRepository<MedicaoClima, Long
 
     Optional<MedicaoClima> findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(String estacaoCodigo);
 
+    /** Precipitacao medida (nunca prevista) somada no intervalo -- usada no Balanco Hidrico (RN007). */
+    @Query("SELECT COALESCE(SUM(m.precipitacaoMm), 0.0) FROM MedicaoClima m "
+            + "WHERE m.estacaoCodigo = :estacaoCodigo AND m.dataHoraUtc >= :inicio AND m.dataHoraUtc < :fim")
+    double somarPrecipitacaoNoIntervalo(
+            @Param("estacaoCodigo") String estacaoCodigo, @Param("inicio") Instant inicio, @Param("fim") Instant fim);
+
     /** Idempotente: reingestao do mesmo estacao+instante e um no-op silencioso, nao um erro. */
     @Modifying
     @Transactional
