@@ -14,9 +14,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 /** Espelha o CORSMiddleware + get_current_user de app/main.py e app/core/security.py. */
 @Configuration
@@ -62,18 +62,27 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(appProperties.cors().origins());
-        String regex = appProperties.cors().originRegex();
-        if (regex != null && !regex.isBlank()) {
-            config.addAllowedOriginPattern(regex);
-        }
-        config.setAllowCredentials(true);
-        config.setAllowedMethods(List.of("*"));
-        config.setAllowedHeaders(List.of("*"));
+        List<String> allowedOrigins = appProperties.cors().origins();
+        String regexProperty = appProperties.cors().originRegex();
+        Pattern originPattern = (regexProperty != null && !regexProperty.isBlank())
+                ? Pattern.compile(regexProperty)
+                : null;
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
+        // CorsConfiguration.addAllowedOriginPattern() so aceita glob (com "*"), nao regex --
+        // CORS_ORIGIN_REGEX precisa de regex de verdade (previews do Vercel), entao a
+        // fonte e construida manualmente por requisicao em vez de usar UrlBasedCorsConfigurationSource.
+        return request -> {
+            CorsConfiguration config = new CorsConfiguration();
+            config.setAllowCredentials(true);
+            config.setAllowedMethods(List.of("*"));
+            config.setAllowedHeaders(List.of("*"));
+
+            String origin = request.getHeader("Origin");
+            if (origin != null
+                    && (allowedOrigins.contains(origin) || (originPattern != null && originPattern.matcher(origin).matches()))) {
+                config.setAllowedOrigins(List.of(origin));
+            }
+            return config;
+        };
     }
 }
