@@ -36,6 +36,10 @@ app:
     user: ${SMTP_USER:}
     password: ${SMTP_PASSWORD:}
     from: ${SMTP_FROM:}
+  inmet:
+    base-url: ${INMET_BASE_URL:https://apitempo.inmet.gov.br}
+  openmeteo:
+    base-url: ${OPENMETEO_BASE_URL:https://api.open-meteo.com}
 
 server:
   port: ${PORT:8000}

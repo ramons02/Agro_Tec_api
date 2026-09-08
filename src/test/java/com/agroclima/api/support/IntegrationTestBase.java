@@ -1,6 +1,9 @@
 package com.agroclima.api.support;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -19,6 +22,9 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class IntegrationTestBase {
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
@@ -28,5 +34,20 @@ public abstract class IntegrationTestBase {
         registry.add("spring.flyway.schemas", () -> "java_test");
         registry.add("spring.flyway.default-schema", () -> "java_test");
         registry.add("spring.flyway.clean-disabled", () -> "false");
+    }
+
+    /**
+     * Limpa TODAS as tabelas da aplicacao antes de cada teste -- todas as classes de
+     * integracao compartilham o mesmo schema fisico (java_test); uma limpeza so das
+     * tabelas "da propria classe" deixa linha que quebra FK de outra classe (ja aconteceu
+     * com AuthControllerIT vs ClimaControllerIT/TalhaoControllerIT). Rode antes de qualquer
+     * setup proprio de subclasse (JUnit roda @BeforeEach da superclasse primeiro).
+     */
+    @BeforeEach
+    void limparTudo() {
+        jdbcTemplate.execute(
+                "TRUNCATE TABLE tokens_recuperacao_senha, vinculos_agronomo_propriedade, "
+                        + "balanco_hidrico_diario, medicoes_clima, talhoes, propriedades, "
+                        + "estacoes_inmet, cultura_kc, usuarios CASCADE");
     }
 }

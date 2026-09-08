@@ -4,7 +4,6 @@ import com.agroclima.api.business.auth.TokenRecuperacaoSenhaRepository;
 import com.agroclima.api.business.auth.UsuarioRepository;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.support.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -36,14 +35,6 @@ class TalhaoControllerIT extends IntegrationTestBase {
 
     @Autowired
     private TalhaoRepository talhaoRepository;
-
-    @BeforeEach
-    void limpar() {
-        talhaoRepository.deleteAll();
-        propriedadeRepository.deleteAll();
-        tokenRepository.deleteAll();
-        usuarioRepository.deleteAll();
-    }
 
     private String registrarELogar(String email, String papel) {
         restTemplate.postForEntity("/api/v1/auth/registro",

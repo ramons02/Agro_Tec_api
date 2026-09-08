@@ -1,8 +1,15 @@
 package com.agroclima.api.business.talhao;
 
+import com.agroclima.api.business.clima.ClimaTempoRealService;
+import com.agroclima.api.business.estacao.EstacaoInmetRepository;
+import com.agroclima.api.business.estacao.EstacaoProximaProjecao;
+import com.agroclima.api.core.calculos.ClassificacaoPulverizacao;
+import com.agroclima.api.core.calculos.PsicrometriaCalculos;
+import com.agroclima.api.core.calculos.PulverizacaoCalculos;
 import com.agroclima.api.core.geo.GeoJsonUtil;
 import com.agroclima.api.core.geo.GeometriaInvalidaException;
 import com.agroclima.api.core.response.ApiEnvelope;
+import com.agroclima.api.core.response.AppException;
 import com.agroclima.api.core.response.PagedResponse;
 import com.agroclima.api.core.security.UsuarioAutenticado;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,14 +33,16 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Espelha app/api/v1/endpoints/talhoes.py -- so os endpoints da Fase 5 (criacao, import,
- * listagem, busca, exclusao). estacao-mais-proxima/pulverizacao/recomendacao/balanco-hidrico
- * dependem de business.clima/balancohidrico (Fase 6/7), ficam pra la.
+ * Espelha app/api/v1/endpoints/talhoes.py -- criacao/import/listagem/busca/exclusao
+ * (Fase 5) + estacao-mais-proxima/pulverizacao (Fase 6, dependiam de business.clima).
+ * recomendacao/balanco-hidrico continuam pendentes pra Fase 7 (business.balancohidrico).
  */
 @RestController
 @RequestMapping("/api/v1/talhoes")
@@ -42,9 +51,16 @@ public class TalhaoController {
     private static final int TAMANHO_PAGINA_PADRAO = 20;
 
     private final TalhaoService talhaoService;
+    private final EstacaoInmetRepository estacaoInmetRepository;
+    private final ClimaTempoRealService climaTempoRealService;
 
-    public TalhaoController(TalhaoService talhaoService) {
+    public TalhaoController(
+            TalhaoService talhaoService,
+            EstacaoInmetRepository estacaoInmetRepository,
+            ClimaTempoRealService climaTempoRealService) {
         this.talhaoService = talhaoService;
+        this.estacaoInmetRepository = estacaoInmetRepository;
+        this.climaTempoRealService = climaTempoRealService;
     }
 
     public record TalhaoRequest(
@@ -99,6 +115,64 @@ public class TalhaoController {
     public ApiEnvelope<Map<String, Object>> buscar(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
         return ApiEnvelope.sucesso(paraDados(talhaoService.buscarVisivelOu404(usuario, id)));
+    }
+
+    @GetMapping("/{id}/estacao-mais-proxima")
+    public ApiEnvelope<Map<String, Object>> estacaoMaisProxima(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
+        Talhao talhao = talhaoService.buscarVisivelOu404(usuario, id);
+        List<EstacaoProximaProjecao> estacoes =
+                estacaoInmetRepository.buscarMaisProximas(talhao.getGeometria().getCentroid(), 3);
+        if (estacoes.isEmpty()) {
+            throw new AppException(404, "Nenhuma estação disponível.");
+        }
+        List<Map<String, Object>> itens = estacoes.stream()
+                .map(e -> (Map<String, Object>) Map.<String, Object>of(
+                        "estacao_codigo", e.getCodigo(),
+                        "nome", e.getNome(),
+                        "distancia_km", e.getDistanciaKm(),
+                        "latitude", e.getLatitude(),
+                        "longitude", e.getLongitude()))
+                .toList();
+        return ApiEnvelope.sucesso(Map.of("estacoes", itens));
+    }
+
+    @GetMapping("/{id}/pulverizacao")
+    public ApiEnvelope<Map<String, Object>> pulverizacao(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
+        Talhao talhao = talhaoService.buscarVisivelOu404(usuario, id);
+        var resultado = climaTempoRealService.obterClimaAtual(talhao)
+                .orElseThrow(() -> new AppException(404, "Nenhuma leitura de vento disponível."));
+
+        ClassificacaoPulverizacao classificacaoVento =
+                PulverizacaoCalculos.classificarPulverizacao(resultado.ventoKmh(), resultado.rajadaKmh());
+
+        Double deltaT = null;
+        ClassificacaoPulverizacao classificacaoDeltaT = ClassificacaoPulverizacao.FAVORAVEL;
+        if (resultado.temperaturaC() != null && resultado.umidadePct() != null) {
+            deltaT = PsicrometriaCalculos.calcularDeltaT(resultado.temperaturaC(), resultado.umidadePct());
+            classificacaoDeltaT = PulverizacaoCalculos.classificarDeltaT(deltaT);
+        }
+
+        List<String> motivosBloqueio = new ArrayList<>();
+        if (classificacaoVento != ClassificacaoPulverizacao.FAVORAVEL) {
+            motivosBloqueio.add(classificacaoVento.name());
+        }
+        if (classificacaoDeltaT != ClassificacaoPulverizacao.FAVORAVEL) {
+            motivosBloqueio.add(classificacaoDeltaT.name());
+        }
+        ClassificacaoPulverizacao classificacaoFinal = classificacaoVento != ClassificacaoPulverizacao.FAVORAVEL
+                ? classificacaoVento
+                : classificacaoDeltaT;
+
+        Map<String, Object> dados = new HashMap<>();
+        dados.put("classificacao", classificacaoFinal);
+        dados.put("motivos_bloqueio", motivosBloqueio);
+        dados.put("vento_kmh", resultado.ventoKmh());
+        dados.put("rajada_kmh", resultado.rajadaKmh());
+        dados.put("delta_t_c", deltaT);
+        dados.put("fonte_dados", resultado.fonteDados());
+        return ApiEnvelope.sucesso(dados);
     }
 
     @DeleteMapping("/{id}")

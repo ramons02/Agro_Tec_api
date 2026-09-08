@@ -1,7 +1,6 @@
 package com.agroclima.api.business.auth;
 
 import com.agroclima.api.support.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -26,12 +25,6 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Autowired
     private TokenRecuperacaoSenhaRepository tokenRepository;
-
-    @BeforeEach
-    void limpar() {
-        tokenRepository.deleteAll();
-        usuarioRepository.deleteAll();
-    }
 
     private ResponseEntity<Map> registrar(String nome, String email, String senha, String papel) {
         return restTemplate.postForEntity("/api/v1/auth/registro",
