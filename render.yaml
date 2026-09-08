@@ -1,24 +1,35 @@
 services:
   - type: web
     name: agrotec-api
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.3
       - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: JWT_ALGORITHM
-        value: HS256
-      - key: JWT_EXPIRATION_HOURS
-        value: "24"
       - key: CORS_ORIGINS
         sync: false
       - key: CORS_ORIGIN_REGEX
         sync: false
       - key: FRONTEND_BASE_URL
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: INMET_BASE_URL
+        value: https://apitempo.inmet.gov.br
+      - key: OPENMETEO_BASE_URL
+        value: https://api.open-meteo.com
