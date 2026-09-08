@@ -2,8 +2,10 @@ package com.agroclima.api.business.estacao;
 
 import org.locationtech.jts.geom.Point;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -21,4 +23,17 @@ public interface EstacaoInmetRepository extends JpaRepository<EstacaoInmet, Stri
             + "LIMIT :limite",
             nativeQuery = true)
     List<EstacaoProximaProjecao> buscarMaisProximas(@Param("centroide") Point centroide, @Param("limite") int limite);
+
+    /** Espelha o upsert de app/scripts/seed_estacoes_inmet.py -- estado sempre "PA" (unico escopo do sistema). */
+    @Modifying
+    @Transactional
+    @Query(value = "INSERT INTO estacoes_inmet (codigo, nome, estado, posicao) "
+            + "VALUES (:codigo, :nome, 'PA', ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)) "
+            + "ON CONFLICT (codigo) DO UPDATE SET nome = EXCLUDED.nome, posicao = EXCLUDED.posicao",
+            nativeQuery = true)
+    void upsert(
+            @Param("codigo") String codigo,
+            @Param("nome") String nome,
+            @Param("latitude") double latitude,
+            @Param("longitude") double longitude);
 }

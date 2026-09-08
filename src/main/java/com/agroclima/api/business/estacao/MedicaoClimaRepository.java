@@ -13,6 +13,13 @@ public interface MedicaoClimaRepository extends JpaRepository<MedicaoClima, Long
 
     Optional<MedicaoClima> findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(String estacaoCodigo);
 
+    /** RNF014 -- retencao: granularidade horaria so ate 12 meses. */
+    boolean existsByDataHoraUtcBefore(Instant limite);
+
+    @Modifying
+    @Transactional
+    long deleteByDataHoraUtcBefore(Instant limite);
+
     /** Precipitacao medida (nunca prevista) somada no intervalo -- usada no Balanco Hidrico (RN007). */
     @Query("SELECT COALESCE(SUM(m.precipitacaoMm), 0.0) FROM MedicaoClima m "
             + "WHERE m.estacaoCodigo = :estacaoCodigo AND m.dataHoraUtc >= :inicio AND m.dataHoraUtc < :fim")

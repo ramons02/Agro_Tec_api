@@ -2,6 +2,8 @@ package com.agroclima.api.business.clima.clients;
 
 import com.agroclima.api.core.config.AppProperties;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -24,11 +26,15 @@ import java.util.Optional;
  * IngestaoService decidir o fallback. Requer User-Agent de navegador (a API do INMET
  * bloqueia UA padrao de HTTP client).
  *
- * buscarEstacoesPa() (catalogo de estacoes, usado so pelo seed script) fica pra Fase 8 --
- * nao e necessario pro fluxo de ingestao/clima em tempo real desta fase.
+ * ATENCAO: os nomes de campo do catalogo /estacoes/T (CD_ESTACAO/DC_NOME/SG_ESTADO/
+ * VL_LATITUDE/VL_LONGITUDE) sao a melhor suposicao com base na convencao publica do
+ * INMET -- nao foram confirmados contra uma resposta real da API. Conferir contra o
+ * payload real antes de rodar o seed em producao.
  */
 @Component
 public class InmetClient {
+
+    private static final Logger log = LoggerFactory.getLogger(InmetClient.class);
 
     private static final Duration TIMEOUT = Duration.ofSeconds(3);
     private static final String USER_AGENT =
@@ -86,6 +92,39 @@ public class InmetClient {
                     dataHora));
         }
         return Optional.empty();
+    }
+
+    /** Catalogo de todas as estacoes automaticas, filtrado pra PA -- usado so pelo seed script. */
+    public List<EstacaoInmetDto> buscarEstacoesPa() {
+        JsonNode resposta;
+        try {
+            resposta = restClient.get().uri("/estacoes/T").retrieve().body(JsonNode.class);
+        } catch (RestClientException ex) {
+            throw new FonteIndisponivelException("INMET indisponível ao buscar catálogo de estações.", ex);
+        }
+
+        List<EstacaoInmetDto> estacoes = new ArrayList<>();
+        if (resposta == null || !resposta.isArray()) {
+            return estacoes;
+        }
+        for (JsonNode item : resposta) {
+            if (!"PA".equals(item.path("SG_ESTADO").asText(null))) {
+                continue;
+            }
+            try {
+                String codigo = item.path("CD_ESTACAO").asText();
+                String nome = item.path("DC_NOME").asText();
+                double latitude = Double.parseDouble(item.path("VL_LATITUDE").asText());
+                double longitude = Double.parseDouble(item.path("VL_LONGITUDE").asText());
+                if (codigo.isBlank() || nome.isBlank()) {
+                    throw new IllegalArgumentException("codigo/nome vazio");
+                }
+                estacoes.add(new EstacaoInmetDto(codigo, nome, latitude, longitude));
+            } catch (RuntimeException ex) {
+                log.warn("Estação do catálogo INMET ignorada (item malformado): {}", item, ex);
+            }
+        }
+        return estacoes;
     }
 
     private String chaveOrdenacao(JsonNode registro) {
