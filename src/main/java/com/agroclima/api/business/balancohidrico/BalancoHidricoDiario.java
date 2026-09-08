@@ -8,6 +8,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,7 +39,8 @@ public class BalancoHidricoDiario extends BaseModel<UUID> {
     private BigDecimal evapotranspiracaoMm;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status_plantio", nullable = false, length = 20)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "status_plantio", nullable = false, columnDefinition = "status_plantio")
     private StatusPlantio statusPlantio;
 
     protected BalancoHidricoDiario() {}

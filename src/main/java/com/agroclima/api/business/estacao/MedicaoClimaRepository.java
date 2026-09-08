@@ -33,7 +33,7 @@ public interface MedicaoClimaRepository extends JpaRepository<MedicaoClima, Long
             + "(estacao_codigo, data_hora_utc, precipitacao_mm, temperatura_c, umidade_pct, "
             + " vento_velocidade_ms, vento_rajada_ms, fonte_dados) "
             + "VALUES (:estacaoCodigo, :dataHoraUtc, :precipitacaoMm, :temperaturaC, :umidadePct, "
-            + " :ventoVelocidadeMs, :ventoRajadaMs, :fonteDados) "
+            + " :ventoVelocidadeMs, :ventoRajadaMs, CAST(:fonteDados AS fonte_dados_medicao)) "
             + "ON CONFLICT (estacao_codigo, data_hora_utc) DO NOTHING",
             nativeQuery = true)
     void inserirSeNaoExistir(

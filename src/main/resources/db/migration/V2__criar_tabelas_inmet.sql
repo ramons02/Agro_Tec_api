@@ -1,6 +1,8 @@
 -- Porte 1:1 de alembic/versions/0002_criar_tabelas_inmet.py
 -- Extensao postgis ja existe no banco compartilhado (instalada pelo setup do Python);
 -- criar aqui exigiria superuser, que o role de app nao tem.
+CREATE TYPE fonte_dados_medicao AS ENUM ('AO_VIVO', 'CACHE_EXPIRADO');
+
 CREATE TABLE estacoes_inmet (
     codigo VARCHAR(10) PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
@@ -20,7 +22,7 @@ CREATE TABLE medicoes_clima (
     umidade_pct NUMERIC(4, 2),
     vento_velocidade_ms NUMERIC(4, 2),
     vento_rajada_ms NUMERIC(4, 2),
-    fonte_dados VARCHAR(20) NOT NULL,
+    fonte_dados fonte_dados_medicao NOT NULL,
     CONSTRAINT uq_medicao_estacao_instante UNIQUE (estacao_codigo, data_hora_utc)
 );
 

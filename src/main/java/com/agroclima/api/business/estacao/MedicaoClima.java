@@ -9,6 +9,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -44,7 +46,8 @@ public class MedicaoClima extends BaseModel<Long> {
     private BigDecimal ventoRajadaMs;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "fonte_dados", nullable = false, length = 20)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "fonte_dados", nullable = false, columnDefinition = "fonte_dados_medicao")
     private FonteDados fonteDados;
 
     protected MedicaoClima() {}

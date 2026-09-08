@@ -25,13 +25,13 @@ public interface DashboardRepository extends Repository<Talhao, UUID> {
             + "  WHERE bhd.talhao_id = t.id ORDER BY bhd.data DESC LIMIT 1) b ON true "
             + "WHERE t.propriedade_id IN (:propriedadeIds) "
             + "AND (:propriedadeIdFiltro IS NULL OR t.propriedade_id = :propriedadeIdFiltro) "
-            + "AND (:status IS NULL OR b.status_plantio = :status)",
+            + "AND (:status IS NULL OR b.status_plantio = CAST(:status AS status_plantio))",
             countQuery = "SELECT count(*) FROM talhoes t "
                     + "LEFT JOIN LATERAL (SELECT status_plantio FROM balanco_hidrico_diario bhd "
                     + "  WHERE bhd.talhao_id = t.id ORDER BY bhd.data DESC LIMIT 1) b ON true "
                     + "WHERE t.propriedade_id IN (:propriedadeIds) "
                     + "AND (:propriedadeIdFiltro IS NULL OR t.propriedade_id = :propriedadeIdFiltro) "
-                    + "AND (:status IS NULL OR b.status_plantio = :status)",
+                    + "AND (:status IS NULL OR b.status_plantio = CAST(:status AS status_plantio))",
             nativeQuery = true)
     Page<DashboardItemProjecao> buscarEscopado(
             @Param("propriedadeIds") List<UUID> propriedadeIds,
@@ -46,12 +46,12 @@ public interface DashboardRepository extends Repository<Talhao, UUID> {
             + "LEFT JOIN LATERAL (SELECT status_plantio, armazenamento_mm FROM balanco_hidrico_diario bhd "
             + "  WHERE bhd.talhao_id = t.id ORDER BY bhd.data DESC LIMIT 1) b ON true "
             + "WHERE (:propriedadeIdFiltro IS NULL OR t.propriedade_id = :propriedadeIdFiltro) "
-            + "AND (:status IS NULL OR b.status_plantio = :status)",
+            + "AND (:status IS NULL OR b.status_plantio = CAST(:status AS status_plantio))",
             countQuery = "SELECT count(*) FROM talhoes t "
                     + "LEFT JOIN LATERAL (SELECT status_plantio FROM balanco_hidrico_diario bhd "
                     + "  WHERE bhd.talhao_id = t.id ORDER BY bhd.data DESC LIMIT 1) b ON true "
                     + "WHERE (:propriedadeIdFiltro IS NULL OR t.propriedade_id = :propriedadeIdFiltro) "
-                    + "AND (:status IS NULL OR b.status_plantio = :status)",
+                    + "AND (:status IS NULL OR b.status_plantio = CAST(:status AS status_plantio))",
             nativeQuery = true)
     Page<DashboardItemProjecao> buscarIrrestrito(
             @Param("propriedadeIdFiltro") UUID propriedadeIdFiltro, @Param("status") String status, Pageable pageable);

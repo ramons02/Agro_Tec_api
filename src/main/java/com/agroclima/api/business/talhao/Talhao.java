@@ -7,6 +7,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.MultiPolygon;
 
 import java.math.BigDecimal;
@@ -34,7 +36,8 @@ public class Talhao extends BaseModel<UUID> {
     private BigDecimal areaHa;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_solo", length = 20)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "tipo_solo", columnDefinition = "tipo_solo")
     private TipoSolo tipoSolo;
 
     @Column(name = "fracao_argila_pct", precision = 5, scale = 2)

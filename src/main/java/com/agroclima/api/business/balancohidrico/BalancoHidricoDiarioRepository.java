@@ -21,7 +21,8 @@ public interface BalancoHidricoDiarioRepository extends JpaRepository<BalancoHid
     @Transactional
     @Query(value = "INSERT INTO balanco_hidrico_diario "
             + "(id, talhao_id, data, armazenamento_mm, precipitacao_mm, evapotranspiracao_mm, status_plantio) "
-            + "VALUES (:id, :talhaoId, :data, :armazenamentoMm, :precipitacaoMm, :evapotranspiracaoMm, :statusPlantio) "
+            + "VALUES (:id, :talhaoId, :data, :armazenamentoMm, :precipitacaoMm, :evapotranspiracaoMm, "
+            + "CAST(:statusPlantio AS status_plantio)) "
             + "ON CONFLICT (talhao_id, data) DO UPDATE SET "
             + "armazenamento_mm = EXCLUDED.armazenamento_mm, "
             + "precipitacao_mm = EXCLUDED.precipitacao_mm, "
