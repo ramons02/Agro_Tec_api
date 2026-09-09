@@ -2,12 +2,9 @@ package com.agroclima.api.business.talhao;
 
 import com.agroclima.api.business.balancohidrico.BalancoHidricoDiario;
 import com.agroclima.api.business.balancohidrico.BalancoHidricoDiarioRepository;
-import com.agroclima.api.business.clima.ClimaTempoRealService;
 import com.agroclima.api.business.estacao.EstacaoInmetRepository;
 import com.agroclima.api.business.estacao.EstacaoProximaProjecao;
 import com.agroclima.api.core.calculos.ClassificacaoPulverizacao;
-import com.agroclima.api.core.calculos.PsicrometriaCalculos;
-import com.agroclima.api.core.calculos.PulverizacaoCalculos;
 import com.agroclima.api.core.calculos.RecomendacaoCalculos;
 import com.agroclima.api.core.calculos.StatusPlantio;
 import com.agroclima.api.core.calculos.TendenciaUmidade;
@@ -38,7 +35,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,17 +54,17 @@ public class TalhaoController {
 
     private final TalhaoService talhaoService;
     private final EstacaoInmetRepository estacaoInmetRepository;
-    private final ClimaTempoRealService climaTempoRealService;
+    private final PulverizacaoService pulverizacaoService;
     private final BalancoHidricoDiarioRepository balancoHidricoDiarioRepository;
 
     public TalhaoController(
             TalhaoService talhaoService,
             EstacaoInmetRepository estacaoInmetRepository,
-            ClimaTempoRealService climaTempoRealService,
+            PulverizacaoService pulverizacaoService,
             BalancoHidricoDiarioRepository balancoHidricoDiarioRepository) {
         this.talhaoService = talhaoService;
         this.estacaoInmetRepository = estacaoInmetRepository;
-        this.climaTempoRealService = climaTempoRealService;
+        this.pulverizacaoService = pulverizacaoService;
         this.balancoHidricoDiarioRepository = balancoHidricoDiarioRepository;
     }
 
@@ -150,7 +146,7 @@ public class TalhaoController {
     public ApiEnvelope<Map<String, Object>> pulverizacao(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
         Talhao talhao = talhaoService.buscarVisivelOu404(usuario, id);
-        ResultadoPulverizacaoInterno resultado = classificarPulverizacaoAtual(talhao)
+        PulverizacaoService.ResultadoPulverizacao resultado = pulverizacaoService.classificarAtual(talhao)
                 .orElseThrow(() -> new AppException(404, "Nenhuma leitura de vento disponível."));
 
         Map<String, Object> dados = new HashMap<>();
@@ -183,8 +179,8 @@ public class TalhaoController {
             }
         }
 
-        ClassificacaoPulverizacao classificacaoPulverizacao = classificarPulverizacaoAtual(talhao)
-                .map(ResultadoPulverizacaoInterno::classificacaoFinal)
+        ClassificacaoPulverizacao classificacaoPulverizacao = pulverizacaoService.classificarAtual(talhao)
+                .map(PulverizacaoService.ResultadoPulverizacao::classificacaoFinal)
                 .orElse(null);
 
         RecomendacaoCalculos.Recomendacao recomendacao =
@@ -236,43 +232,6 @@ public class TalhaoController {
         }).toList();
 
         return ApiEnvelope.sucesso(Map.of("dias", itens));
-    }
-
-    private record ResultadoPulverizacaoInterno(
-            ClassificacaoPulverizacao classificacaoFinal,
-            List<String> motivosBloqueio,
-            double ventoKmh,
-            Double rajadaKmh,
-            Double deltaTC,
-            Object fonteDados) {}
-
-    private Optional<ResultadoPulverizacaoInterno> classificarPulverizacaoAtual(Talhao talhao) {
-        return climaTempoRealService.obterClimaAtual(talhao).map(resultado -> {
-            ClassificacaoPulverizacao classificacaoVento =
-                    PulverizacaoCalculos.classificarPulverizacao(resultado.ventoKmh(), resultado.rajadaKmh());
-
-            Double deltaT = null;
-            ClassificacaoPulverizacao classificacaoDeltaT = ClassificacaoPulverizacao.FAVORAVEL;
-            if (resultado.temperaturaC() != null && resultado.umidadePct() != null) {
-                deltaT = PsicrometriaCalculos.calcularDeltaT(resultado.temperaturaC(), resultado.umidadePct());
-                classificacaoDeltaT = PulverizacaoCalculos.classificarDeltaT(deltaT);
-            }
-
-            List<String> motivosBloqueio = new ArrayList<>();
-            if (classificacaoVento != ClassificacaoPulverizacao.FAVORAVEL) {
-                motivosBloqueio.add(classificacaoVento.name());
-            }
-            if (classificacaoDeltaT != ClassificacaoPulverizacao.FAVORAVEL) {
-                motivosBloqueio.add(classificacaoDeltaT.name());
-            }
-            ClassificacaoPulverizacao classificacaoFinal = classificacaoVento != ClassificacaoPulverizacao.FAVORAVEL
-                    ? classificacaoVento
-                    : classificacaoDeltaT;
-
-            return new ResultadoPulverizacaoInterno(
-                    classificacaoFinal, motivosBloqueio, resultado.ventoKmh(), resultado.rajadaKmh(), deltaT,
-                    resultado.fonteDados());
-        });
     }
 
     @DeleteMapping("/{id}")

@@ -55,6 +55,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/registro",
                                 "/api/v1/auth/recuperar-senha",
                                 "/api/v1/auth/redefinir-senha").permitAll()
+                        // Chamado pela propria Telegram Bot API, nunca pelo frontend -- nao tem
+                        // Bearer token pra exigir (feature 017, contracts/telegram.md).
+                        .requestMatchers(HttpMethod.POST, "/api/v1/telegram/webhook").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
