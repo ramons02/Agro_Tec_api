@@ -103,7 +103,7 @@ public class OpenMeteoClient {
                 .uri(uriBuilder -> uriBuilder.path("/v1/forecast")
                         .queryParam("latitude", lat)
                         .queryParam("longitude", lon)
-                        .queryParam("hourly", "wind_speed_10m,wind_gusts_10m,wind_speed_100m,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm")
+                        .queryParam("hourly", "wind_speed_10m,wind_gusts_10m,wind_speed_100m,temperature_2m,relative_humidity_2m,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm")
                         .queryParam("daily", "et0_fao_evapotranspiration,precipitation_sum")
                         .queryParam("timezone", "UTC")
                         .build())
@@ -118,6 +118,8 @@ public class OpenMeteoClient {
         double vento10m = primeiroValor(hourly, "wind_speed_10m");
         double rajada10m = primeiroValor(hourly, "wind_gusts_10m");
         double vento100m = primeiroValor(hourly, "wind_speed_100m");
+        Double temperatura2m = primeiroValorOuNull(hourly, "temperature_2m");
+        Double umidadeAr2m = primeiroValorOuNull(hourly, "relative_humidity_2m");
         double umidadeSolo07 = primeiroValor(hourly, "soil_moisture_0_to_7cm");
         double et0 = primeiroValor(daily, "et0_fao_evapotranspiration");
         double precipitacaoPrevista = primeiroValor(daily, "precipitation_sum");
@@ -126,8 +128,8 @@ public class OpenMeteoClient {
         outrasCamadas.put("soil_moisture_7_to_28cm", primeiroValor(hourly, "soil_moisture_7_to_28cm"));
 
         return new PrevisaoClimatica(
-                lat, lon, vento10m, vento100m, rajada10m, et0, umidadeSolo07, outrasCamadas, precipitacaoPrevista,
-                Instant.now());
+                lat, lon, vento10m, vento100m, rajada10m, temperatura2m, umidadeAr2m, et0, umidadeSolo07,
+                outrasCamadas, precipitacaoPrevista, Instant.now());
     }
 
     private double primeiroValor(JsonNode secao, String campo) {
@@ -137,5 +139,16 @@ public class OpenMeteoClient {
         }
         JsonNode primeiro = array.get(0);
         return primeiro.isNumber() ? primeiro.asDouble() : 0.0;
+    }
+
+    /** Usado pra campos onde 0.0 tem significado real (ex: 0°C) -- ausencia vira null,
+     * nunca um zero fabricado que passaria despercebido numa checagem de seguranca. */
+    private Double primeiroValorOuNull(JsonNode secao, String campo) {
+        JsonNode array = secao.path(campo);
+        if (!array.isArray() || array.isEmpty()) {
+            return null;
+        }
+        JsonNode primeiro = array.get(0);
+        return primeiro.isNumber() ? primeiro.asDouble() : null;
     }
 }

@@ -9,6 +9,8 @@ public record PrevisaoClimatica(
         double vento10mKmh,
         double vento100mKmh,
         double rajada10mKmh,
+        Double temperatura2mC,
+        Double umidadeAr2mPct,
         double evapotranspiracaoMm,
         double umidadeSolo0a7cm,
         Map<String, Double> umidadeSoloOutrasCamadas,
