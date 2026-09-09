@@ -19,8 +19,9 @@ public final class PulverizacaoCalculos {
         return velocidadeMs * FATOR_MS_PARA_KMH;
     }
 
-    public static ClassificacaoPulverizacao classificarPulverizacao(double ventoKmh, double rajadaKmh) {
-        if (ventoKmh > LIMITE_VENTO_MAX_FAVORAVEL || rajadaKmh > LIMITE_RAJADA_MAX_FAVORAVEL) {
+    /** rajadaKmh nulo (fonte sem dado de rajada, ex: fallback Open-Meteo) so cai na checagem de vento. */
+    public static ClassificacaoPulverizacao classificarPulverizacao(double ventoKmh, Double rajadaKmh) {
+        if (ventoKmh > LIMITE_VENTO_MAX_FAVORAVEL || (rajadaKmh != null && rajadaKmh > LIMITE_RAJADA_MAX_FAVORAVEL)) {
             return ClassificacaoPulverizacao.BLOQUEIO_VENTO_FORTE;
         }
         if (ventoKmh < LIMITE_VENTO_MIN_FAVORAVEL) {

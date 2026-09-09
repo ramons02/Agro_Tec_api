@@ -51,7 +51,7 @@ public class ClimaTempoRealService {
             String estacaoCodigo,
             double chuvaMm,
             double ventoKmh,
-            double rajadaKmh,
+            Double rajadaKmh,
             Double temperaturaC,
             Double umidadePct,
             FonteDados fonteDados,
@@ -86,7 +86,7 @@ public class ClimaTempoRealService {
 
         double chuva = interpolar(contribuicoes, c -> c.medicao().getPrecipitacaoMm());
         double ventoMs = interpolar(contribuicoes, c -> c.medicao().getVentoVelocidadeMs());
-        double rajadaMs = interpolar(contribuicoes, c -> c.medicao().getVentoRajadaMs());
+        Double rajadaMs = interpolarOuNull(contribuicoes, c -> c.medicao().getVentoRajadaMs());
         Double temperatura = interpolarOuNull(contribuicoes, c -> c.medicao().getTemperaturaC());
         Double umidade = interpolarOuNull(contribuicoes, c -> c.medicao().getUmidadePct());
 
@@ -95,7 +95,7 @@ public class ClimaTempoRealService {
                 estacaoReferencia,
                 chuva,
                 PulverizacaoCalculos.converterMsParaKmh(ventoMs),
-                PulverizacaoCalculos.converterMsParaKmh(rajadaMs),
+                rajadaMs != null ? PulverizacaoCalculos.converterMsParaKmh(rajadaMs) : null,
                 temperatura,
                 umidade,
                 fonteFinal,

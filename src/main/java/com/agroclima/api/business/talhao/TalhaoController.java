@@ -219,7 +219,7 @@ public class TalhaoController {
             ClassificacaoPulverizacao classificacaoFinal,
             List<String> motivosBloqueio,
             double ventoKmh,
-            double rajadaKmh,
+            Double rajadaKmh,
             Double deltaTC,
             Object fonteDados) {}
 

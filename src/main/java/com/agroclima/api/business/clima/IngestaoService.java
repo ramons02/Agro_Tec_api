@@ -63,8 +63,11 @@ public class IngestaoService {
         try {
             PrevisaoClimatica previsao =
                     openMeteoClient.obterPrevisao(estacao.getPosicao().getY(), estacao.getPosicao().getX());
+            // umidadeSolo0a7cm() e fracao de umidade do SOLO (nao umidade relativa do ar) --
+            // Open-Meteo nao e consultado pra umidade do ar/temperatura, entao ambas ficam
+            // null aqui (RN021/RN022 de Delta T so rodam com dado real, nunca com esse proxy).
             medicaoClimaRepository.inserirSeNaoExistir(
-                    estacao.getCodigo(), previsao.obtidoEmUtc(), null, null, previsao.umidadeSolo0a7cm(),
+                    estacao.getCodigo(), previsao.obtidoEmUtc(), null, null, null,
                     previsao.vento10mKmh() / 3.6, null, FonteDados.AO_VIVO.name());
             return ResultadoIngestao.FALLBACK;
         } catch (FontePrevisaoIndisponivelException ex) {
