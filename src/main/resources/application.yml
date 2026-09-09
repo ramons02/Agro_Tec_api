@@ -41,6 +41,10 @@ app:
     base-url: ${INMET_BASE_URL:https://apitempo.inmet.gov.br}
   openmeteo:
     base-url: ${OPENMETEO_BASE_URL:https://api.open-meteo.com}
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:}
+    base-url: ${TELEGRAM_BASE_URL:https://api.telegram.org}
 
 server:
   port: ${PORT:8000}

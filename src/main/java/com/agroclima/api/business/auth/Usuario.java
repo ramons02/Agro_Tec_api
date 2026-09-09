@@ -36,6 +36,10 @@ public class Usuario extends BaseModel<UUID> {
     @Column(name = "criado_em", nullable = false)
     private Instant criadoEm;
 
+    /** null = sem Telegram vinculado (FR-005, feature 017) -- nunca dispara tentativa de envio. */
+    @Column(name = "telegram_chat_id")
+    private String telegramChatId;
+
     protected Usuario() {}
 
     public Usuario(String nome, String email, String senhaHash, Papel papel) {
@@ -49,6 +53,14 @@ public class Usuario extends BaseModel<UUID> {
 
     public void atualizarSenha(String novaSenhaHash) {
         this.senhaHash = novaSenhaHash;
+    }
+
+    public void vincularTelegram(String chatId) {
+        this.telegramChatId = chatId;
+    }
+
+    public void desvincularTelegram() {
+        this.telegramChatId = null;
     }
 
     @Override
@@ -74,5 +86,9 @@ public class Usuario extends BaseModel<UUID> {
 
     public Instant getCriadoEm() {
         return criadoEm;
+    }
+
+    public String getTelegramChatId() {
+        return telegramChatId;
     }
 }

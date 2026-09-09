@@ -3,6 +3,7 @@ package com.agroclima.api.core.scheduler;
 import com.agroclima.api.business.balancohidrico.BalancoHidricoService;
 import com.agroclima.api.business.clima.IngestaoService;
 import com.agroclima.api.business.estacao.MedicaoClimaRepository;
+import com.agroclima.api.business.telegram.AlertaPulverizacaoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -28,20 +29,24 @@ public class ScheduledJobs {
     private final IngestaoService ingestaoService;
     private final BalancoHidricoService balancoHidricoService;
     private final MedicaoClimaRepository medicaoClimaRepository;
+    private final AlertaPulverizacaoService alertaPulverizacaoService;
 
     public ScheduledJobs(
             IngestaoService ingestaoService,
             BalancoHidricoService balancoHidricoService,
-            MedicaoClimaRepository medicaoClimaRepository) {
+            MedicaoClimaRepository medicaoClimaRepository,
+            AlertaPulverizacaoService alertaPulverizacaoService) {
         this.ingestaoService = ingestaoService;
         this.balancoHidricoService = balancoHidricoService;
         this.medicaoClimaRepository = medicaoClimaRepository;
+        this.alertaPulverizacaoService = alertaPulverizacaoService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void aoIniciar() {
         ingestaoInmetPeriodica();
         balancoHidricoDiario();
+        alertaPulverizacaoPeriodico();
     }
 
     /** A cada 10 minutos -- ingestao_inmet_periodica. */
@@ -69,5 +74,14 @@ public class ScheduledJobs {
     public void balancoHidricoDiario() {
         var resumo = balancoHidricoService.calcularBalancoHidricoTodosTalhoes();
         log.info("Balanço hídrico diário calculado para {} talhões.", resumo.talhoesCalculados());
+    }
+
+    /** A cada 30 minutos -- mesma cadencia de staleness do clima em tempo real (RN008),
+     * feature 017 (alertas via Telegram). */
+    @Scheduled(fixedRate = 30, timeUnit = java.util.concurrent.TimeUnit.MINUTES)
+    public void alertaPulverizacaoPeriodico() {
+        var resumo = alertaPulverizacaoService.processarTodosTalhoes();
+        log.info("Alerta de pulverização: {} talhões processados, {} alertas enviados.",
+                resumo.talhoesProcessados(), resumo.alertasEnviados());
     }
 }
