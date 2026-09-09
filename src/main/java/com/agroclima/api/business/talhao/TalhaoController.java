@@ -217,6 +217,27 @@ public class TalhaoController {
         return ApiEnvelope.sucesso(dados);
     }
 
+    @GetMapping("/{id}/balanco-hidrico/historico")
+    public ApiEnvelope<Map<String, Object>> balancoHidricoHistorico(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
+        Talhao talhao = talhaoService.buscarVisivelOu404(usuario, id);
+        double cad = talhao.getCapacidadeAguaDisponivelMm() != null ? talhao.getCapacidadeAguaDisponivelMm() : 0.0;
+
+        List<BalancoHidricoDiario> dias = balancoHidricoDiarioRepository
+                .findByTalhaoIdOrderByDataDesc(id, org.springframework.data.domain.Limit.of(10));
+
+        List<Map<String, Object>> itens = dias.reversed().stream().map(dia -> {
+            double percentualCad = cad > 0 ? dia.getArmazenamentoMm() / cad * 100.0 : 0.0;
+            Map<String, Object> item = new HashMap<>();
+            item.put("data", dia.getData().toString());
+            item.put("percentual_cad", percentualCad);
+            item.put("status_plantio", dia.getStatusPlantio());
+            return item;
+        }).toList();
+
+        return ApiEnvelope.sucesso(Map.of("dias", itens));
+    }
+
     private record ResultadoPulverizacaoInterno(
             ClassificacaoPulverizacao classificacaoFinal,
             List<String> motivosBloqueio,
