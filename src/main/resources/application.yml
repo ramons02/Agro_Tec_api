@@ -21,7 +21,6 @@ spring:
     baseline-version: ${SPRING_FLYWAY_BASELINE_VERSION:1}
   jackson:
     property-naming-strategy: SNAKE_CASE
-    default-property-inclusion: non_null
 
 app:
   jwt:
