@@ -68,13 +68,21 @@ public class BalancoHidricoService {
         }
         String estacaoCodigo = estacoes.get(0).getCodigo();
 
+        Instant inicioDia = dataAlvo.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant fimDia = dataAlvo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        // Sem nenhuma leitura real de precipitacao no dia (INMET fora do ar e o fallback
+        // Open-Meteo nao mede chuva), nao da pra saber se choveu -- nao assume 0mm real,
+        // pula o calculo do dia e mantem o ultimo armazenamento conhecido (RN007 exige
+        // chuva medida, nunca prevista, RN009).
+        if (!medicaoClimaRepository.existePrecipitacaoMedidaNoIntervalo(estacaoCodigo, inicioDia, fimDia)) {
+            return Optional.empty();
+        }
+
         double armAnterior = balancoHidricoDiarioRepository
                 .findByTalhaoIdAndData(talhao.getId(), dataAlvo.minusDays(1))
                 .map(BalancoHidricoDiario::getArmazenamentoMm)
                 .orElseGet(() -> BalancoHidricoCalculos.armazenamentoInicial(cad));
 
-        Instant inicioDia = dataAlvo.atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant fimDia = dataAlvo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         double precipitacaoMedida = medicaoClimaRepository.somarPrecipitacaoNoIntervalo(estacaoCodigo, inicioDia, fimDia);
 
         double et0 = 0.0;

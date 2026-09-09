@@ -26,6 +26,18 @@ public interface MedicaoClimaRepository extends JpaRepository<MedicaoClima, Long
     double somarPrecipitacaoNoIntervalo(
             @Param("estacaoCodigo") String estacaoCodigo, @Param("inicio") Instant inicio, @Param("fim") Instant fim);
 
+    /**
+     * Existe ALGUMA leitura com precipitacao de verdade medida (nao fallback Open-Meteo, que
+     * grava precipitacao_mm null) no intervalo -- distingue "choveu 0mm de verdade" de "nao
+     * temos leitura nenhuma pra saber". Sem isso, somarPrecipitacaoNoIntervalo COALESCE pra
+     * 0.0 nos dois casos, e o Balanco Hidrico drenava o reservatorio assumindo seca real
+     * durante uma falha de ingestao (INMET fora do ar), quando na verdade so faltava dado.
+     */
+    @Query("SELECT COUNT(m) > 0 FROM MedicaoClima m WHERE m.estacaoCodigo = :estacaoCodigo "
+            + "AND m.dataHoraUtc >= :inicio AND m.dataHoraUtc < :fim AND m.precipitacaoMm IS NOT NULL")
+    boolean existePrecipitacaoMedidaNoIntervalo(
+            @Param("estacaoCodigo") String estacaoCodigo, @Param("inicio") Instant inicio, @Param("fim") Instant fim);
+
     /** Idempotente: reingestao do mesmo estacao+instante e um no-op silencioso, nao um erro. */
     @Modifying
     @Transactional
