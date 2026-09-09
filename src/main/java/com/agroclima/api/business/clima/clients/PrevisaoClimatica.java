@@ -8,6 +8,7 @@ public record PrevisaoClimatica(
         double longitude,
         double vento10mKmh,
         double vento100mKmh,
+        double rajada10mKmh,
         double evapotranspiracaoMm,
         double umidadeSolo0a7cm,
         Map<String, Double> umidadeSoloOutrasCamadas,

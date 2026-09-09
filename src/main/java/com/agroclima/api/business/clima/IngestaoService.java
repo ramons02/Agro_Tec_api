@@ -68,7 +68,7 @@ public class IngestaoService {
             // null aqui (RN021/RN022 de Delta T so rodam com dado real, nunca com esse proxy).
             medicaoClimaRepository.inserirSeNaoExistir(
                     estacao.getCodigo(), previsao.obtidoEmUtc(), null, null, null,
-                    previsao.vento10mKmh() / 3.6, null, FonteDados.AO_VIVO.name());
+                    previsao.vento10mKmh() / 3.6, previsao.rajada10mKmh() / 3.6, FonteDados.AO_VIVO.name());
             return ResultadoIngestao.FALLBACK;
         } catch (FontePrevisaoIndisponivelException ex) {
             log.error("Fallback Open-Meteo também falhou para {}: {}", estacao.getCodigo(), ex.getMessage());

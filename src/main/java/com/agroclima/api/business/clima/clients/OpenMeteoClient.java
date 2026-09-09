@@ -103,7 +103,7 @@ public class OpenMeteoClient {
                 .uri(uriBuilder -> uriBuilder.path("/v1/forecast")
                         .queryParam("latitude", lat)
                         .queryParam("longitude", lon)
-                        .queryParam("hourly", "wind_speed_10m,wind_speed_100m,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm")
+                        .queryParam("hourly", "wind_speed_10m,wind_gusts_10m,wind_speed_100m,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm")
                         .queryParam("daily", "et0_fao_evapotranspiration,precipitation_sum")
                         .queryParam("timezone", "UTC")
                         .build())
@@ -116,6 +116,7 @@ public class OpenMeteoClient {
         JsonNode daily = resposta.path("daily");
 
         double vento10m = primeiroValor(hourly, "wind_speed_10m");
+        double rajada10m = primeiroValor(hourly, "wind_gusts_10m");
         double vento100m = primeiroValor(hourly, "wind_speed_100m");
         double umidadeSolo07 = primeiroValor(hourly, "soil_moisture_0_to_7cm");
         double et0 = primeiroValor(daily, "et0_fao_evapotranspiration");
@@ -125,7 +126,8 @@ public class OpenMeteoClient {
         outrasCamadas.put("soil_moisture_7_to_28cm", primeiroValor(hourly, "soil_moisture_7_to_28cm"));
 
         return new PrevisaoClimatica(
-                lat, lon, vento10m, vento100m, et0, umidadeSolo07, outrasCamadas, precipitacaoPrevista, Instant.now());
+                lat, lon, vento10m, vento100m, rajada10m, et0, umidadeSolo07, outrasCamadas, precipitacaoPrevista,
+                Instant.now());
     }
 
     private double primeiroValor(JsonNode secao, String campo) {
