@@ -22,7 +22,17 @@
         <hibernate-spatial.version>6.6.4.Final</hibernate-spatial.version>
         <jjwt.version>0.12.6</jjwt.version>
         <testcontainers.version>1.20.4</testcontainers.version>
+        <geotools.version>35.1</geotools.version>
     </properties>
+
+    <repositories>
+        <!-- GeoTools nao esta no Maven Central, repositorio oficial da OSGeo. -->
+        <repository>
+            <id>osgeo</id>
+            <name>OSGeo Release Repository</name>
+            <url>https://repo.osgeo.org/repository/release/</url>
+        </repository>
+    </repositories>
 
     <dependencies>
         <dependency>
@@ -91,6 +101,23 @@
             <groupId>org.locationtech.jts.io</groupId>
             <artifactId>jts-io-common</artifactId>
             <version>1.19.0</version>
+        </dependency>
+
+        <!-- Import de Shapefile (spec 019, User Story 2): le .shp/.zip e reprojeta CRS. -->
+        <dependency>
+            <groupId>org.geotools</groupId>
+            <artifactId>gt-shapefile</artifactId>
+            <version>${geotools.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotools</groupId>
+            <artifactId>gt-referencing</artifactId>
+            <version>${geotools.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotools</groupId>
+            <artifactId>gt-epsg-hsql</artifactId>
+            <version>${geotools.version}</version>
         </dependency>
 
         <dependency>
