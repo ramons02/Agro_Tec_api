@@ -212,6 +212,8 @@ public class TalhaoController {
         dados.put("armazenamento_mm", balanco.getArmazenamentoMm());
         dados.put("cad_mm", cad);
         dados.put("percentual_cad", percentualCad);
+        dados.put("precipitacao_mm", balanco.getPrecipitacaoMm());
+        dados.put("evapotranspiracao_mm", balanco.getEvapotranspiracaoMm());
         return ApiEnvelope.sucesso(dados);
     }
 
