@@ -12,8 +12,11 @@ import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -30,6 +33,8 @@ public class OpenMeteoClient {
 
     private final RestClient restClient;
     private final Cache<String, PrevisaoClimatica> cache =
+            Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
+    private final Cache<String, List<PrevisaoDiaria>> cache10Dias =
             Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
     private final AtomicLong contadorChamadasReais = new AtomicLong();
 
@@ -53,10 +58,25 @@ public class OpenMeteoClient {
         if (emCache != null) {
             return emCache;
         }
-        JsonNode resposta = chamarComRetryEm429(lat, lon);
+        JsonNode resposta = chamarComRetryEm429(() -> executarChamada(lat, lon));
         contadorChamadasReais.incrementAndGet();
         PrevisaoClimatica previsao = parsear(resposta, lat, lon);
         cache.put(chave, previsao);
+        return previsao;
+    }
+
+    /** Previsao diaria pros proximos 10 dias -- busca de cidade (nao usada no fallback
+     * INMET nem no Balanco Hidrico, que seguem so em obterPrevisao). */
+    public List<PrevisaoDiaria> obterPrevisao10Dias(double lat, double lon) {
+        String chave = chaveCache(lat, lon);
+        List<PrevisaoDiaria> emCache = cache10Dias.getIfPresent(chave);
+        if (emCache != null) {
+            return emCache;
+        }
+        JsonNode resposta = chamarComRetryEm429(() -> executarChamada10Dias(lat, lon));
+        contadorChamadasReais.incrementAndGet();
+        List<PrevisaoDiaria> previsao = parsear10Dias(resposta);
+        cache10Dias.put(chave, previsao);
         return previsao;
     }
 
@@ -73,10 +93,10 @@ public class OpenMeteoClient {
      * normalmente reflete rate-limit compartilhado entre varias estacoes do mesmo ciclo
      * de ingestao, nao uma falha isolada (commit Python `375055f`).
      */
-    private JsonNode chamarComRetryEm429(double lat, double lon) {
+    private JsonNode chamarComRetryEm429(java.util.function.Supplier<JsonNode> chamada) {
         for (int tentativa = 0; tentativa <= 1; tentativa++) {
             try {
-                return executarChamada(lat, lon);
+                return chamada.get();
             } catch (HttpClientErrorException.TooManyRequests ex) {
                 if (tentativa == 1) {
                     throw new FontePrevisaoIndisponivelException("Open-Meteo indisponível (429 persistente).", ex);
@@ -109,6 +129,46 @@ public class OpenMeteoClient {
                         .build())
                 .retrieve()
                 .body(JsonNode.class);
+    }
+
+    private JsonNode executarChamada10Dias(double lat, double lon) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/v1/forecast")
+                        .queryParam("latitude", lat)
+                        .queryParam("longitude", lon)
+                        .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_sum,"
+                                + "precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max")
+                        .queryParam("forecast_days", 10)
+                        .queryParam("timezone", "UTC")
+                        .build())
+                .retrieve()
+                .body(JsonNode.class);
+    }
+
+    private List<PrevisaoDiaria> parsear10Dias(JsonNode resposta) {
+        JsonNode daily = resposta.path("daily");
+        JsonNode datas = daily.path("time");
+        List<PrevisaoDiaria> dias = new ArrayList<>();
+        for (int i = 0; i < datas.size(); i++) {
+            dias.add(new PrevisaoDiaria(
+                    LocalDate.parse(datas.get(i).asText()),
+                    valorNoIndice(daily, "temperature_2m_min", i),
+                    valorNoIndice(daily, "temperature_2m_max", i),
+                    valorNoIndice(daily, "precipitation_sum", i),
+                    valorNoIndice(daily, "precipitation_probability_max", i),
+                    valorNoIndice(daily, "wind_speed_10m_max", i),
+                    valorNoIndice(daily, "wind_gusts_10m_max", i)));
+        }
+        return dias;
+    }
+
+    private double valorNoIndice(JsonNode secao, String campo, int indice) {
+        JsonNode array = secao.path(campo);
+        if (!array.isArray() || indice >= array.size()) {
+            return 0.0;
+        }
+        JsonNode valor = array.get(indice);
+        return valor.isNumber() ? valor.asDouble() : 0.0;
     }
 
     private PrevisaoClimatica parsear(JsonNode resposta, double lat, double lon) {
