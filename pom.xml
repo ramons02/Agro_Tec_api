@@ -97,6 +97,14 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+        <!-- Cache de curto prazo das consultas ao INMET (spec 018, RF038/RNF019). Lettuce puro,
+             não o starter spring-boot-starter-data-redis: sem isso a autoconfig do Spring
+             cria um RedisConnectionFactory eager mesmo sem REDIS_URL configurada, contrariando
+             o requisito de "nunca tenta conectar" quando a variável está ausente. -->
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.locationtech.jts.io</groupId>
             <artifactId>jts-io-common</artifactId>

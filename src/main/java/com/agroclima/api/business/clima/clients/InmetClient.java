@@ -1,7 +1,10 @@
 package com.agroclima.api.business.clima.clients;
 
+import com.agroclima.api.core.cache.CacheRedisService;
 import com.agroclima.api.core.config.AppProperties;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -40,10 +43,14 @@ public class InmetClient {
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
     private static final DateTimeFormatter FORMATO_DATA_HORA = DateTimeFormatter.ofPattern("yyyy-MM-dd HHmm");
+    private static final String PREFIXO_CACHE = "medicao-inmet:";
+    private static final long TTL_CACHE_SEGUNDOS = 900;
 
     private final RestClient restClient;
+    private final CacheRedisService cacheRedisService;
+    private final ObjectMapper objectMapper;
 
-    public InmetClient(AppProperties appProperties) {
+    public InmetClient(AppProperties appProperties, CacheRedisService cacheRedisService, ObjectMapper objectMapper) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout((int) TIMEOUT.toMillis());
         factory.setReadTimeout((int) TIMEOUT.toMillis());
@@ -52,9 +59,47 @@ public class InmetClient {
                 .requestFactory(factory)
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
                 .build();
+        this.cacheRedisService = cacheRedisService;
+        this.objectMapper = objectMapper;
     }
 
+    /**
+     * Cache Redis de 15min por estação (spec 018, RF038/RNF019) -- complementar ao cache de
+     * previsão por coordenada+hora da feature 003, nunca o substitui. Cache indisponível ou
+     * com JSON inválido degrada pra chamada real, nunca propaga erro (FR-003).
+     */
     public Optional<MedicaoInmetDto> buscarMedicaoRecente(String codigoEstacao) {
+        String chaveCache = PREFIXO_CACHE + codigoEstacao;
+        Optional<MedicaoInmetDto> doCache = lerDoCache(chaveCache);
+        if (doCache.isPresent()) {
+            return doCache;
+        }
+
+        Optional<MedicaoInmetDto> medicao = buscarMedicaoRecenteReal(codigoEstacao);
+        medicao.ifPresent(m -> gravarNoCache(chaveCache, m));
+        return medicao;
+    }
+
+    private Optional<MedicaoInmetDto> lerDoCache(String chave) {
+        return cacheRedisService.obter(chave).flatMap(json -> {
+            try {
+                return Optional.of(objectMapper.readValue(json, MedicaoInmetDto.class));
+            } catch (JsonProcessingException ex) {
+                log.warn("Cache Redis com JSON inválido pra {}, ignorando: {}", chave, ex.getMessage());
+                return Optional.empty();
+            }
+        });
+    }
+
+    private void gravarNoCache(String chave, MedicaoInmetDto medicao) {
+        try {
+            cacheRedisService.definir(chave, objectMapper.writeValueAsString(medicao), TTL_CACHE_SEGUNDOS);
+        } catch (JsonProcessingException ex) {
+            log.warn("Falha ao serializar medição pra cache Redis ({}): {}", chave, ex.getMessage());
+        }
+    }
+
+    private Optional<MedicaoInmetDto> buscarMedicaoRecenteReal(String codigoEstacao) {
         JsonNode resposta;
         try {
             resposta = restClient.get()

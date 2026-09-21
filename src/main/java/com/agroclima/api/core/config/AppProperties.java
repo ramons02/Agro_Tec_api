@@ -8,7 +8,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
         Jwt jwt, Cors cors, String frontendBaseUrl, Smtp smtp, Inmet inmet, Openmeteo openmeteo,
-        Telegram telegram) {
+        Telegram telegram, Redis redis) {
 
     public record Jwt(String secret, String algorithm, int expirationHours) {}
 
@@ -25,4 +25,7 @@ public record AppProperties(
 
     /** baseUrl override-avel em teste (WireMock) -- em producao aponta pra API real do Open-Meteo. */
     public record Openmeteo(String baseUrl) {}
+
+    /** url vazia/ausente = CacheRedisService nunca tenta conectar (spec 018, RNF019). */
+    public record Redis(String url) {}
 }
