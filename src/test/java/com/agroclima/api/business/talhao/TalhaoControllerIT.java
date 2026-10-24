@@ -1,6 +1,8 @@
 package com.agroclima.api.business.talhao;
 
+import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.TokenRecuperacaoSenhaRepository;
+import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.support.IntegrationTestBase;
@@ -12,6 +14,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,9 @@ class TalhaoControllerIT extends IntegrationTestBase {
     private TokenRecuperacaoSenhaRepository tokenRepository;
 
     @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
     private PropriedadeRepository propriedadeRepository;
 
     @Autowired
@@ -39,6 +45,15 @@ class TalhaoControllerIT extends IntegrationTestBase {
     private String registrarELogar(String email, String papel) {
         restTemplate.postForEntity("/api/v1/auth/registro",
                 Map.of("nome", "Usuario Teste", "email", email, "senha", "senha12345", "papel", papel), Map.class);
+        ResponseEntity<Map> loginResposta = restTemplate.postForEntity("/api/v1/auth/login",
+                Map.of("email", email, "senha", "senha12345"), Map.class);
+        return (String) dados(loginResposta).get("token");
+    }
+
+    /** Gestor so nasce por convite (registro publico recusa o papel), entao o teste o grava direto. */
+    private String criarGestorELogar(String email) {
+        usuarioRepository.save(new Usuario("Gestor Teste", email, passwordEncoder.encode("senha12345"),
+                Papel.GESTOR_TECNOLOGIA));
         ResponseEntity<Map> loginResposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", email, "senha", "senha12345"), Map.class);
         return (String) dados(loginResposta).get("token");
@@ -182,7 +197,7 @@ class TalhaoControllerIT extends IntegrationTestBase {
         String tokenDono = registrarELogar("donoY@teste.com", "PRODUTOR_RURAL");
         criarPropriedade(tokenDono, "Fazenda Y");
 
-        String tokenGestor = registrarELogar("gestor@teste.com", "GESTOR_TECNOLOGIA");
+        String tokenGestor = criarGestorELogar("gestor@teste.com");
         ResponseEntity<Map> resposta = restTemplate.exchange("/api/v1/propriedades?page=1&page_size=50", HttpMethod.GET,
                 new HttpEntity<>(headersCom(tokenGestor)), Map.class);
 
