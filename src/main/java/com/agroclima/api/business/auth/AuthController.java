@@ -123,7 +123,9 @@ public class AuthController {
     @PostMapping("/recuperar-senha")
     public ApiEnvelope<Map<String, String>> recuperarSenha(@Valid @RequestBody RecuperarSenhaRequest requisicao) {
         authService.solicitarRecuperacaoSenha(requisicao.email());
-        return ApiEnvelope.sucesso(Map.of("mensagem", "Se o email existir, um link de redefinição foi enviado."));
+        return ApiEnvelope.sucesso(Map.of("mensagem",
+                "Se o e-mail estiver cadastrado, o pedido foi registrado: produtor e agrônomo recebem uma senha temporária do "
+                        + "administrador; o gestor recebe um link por e-mail."));
     }
 
     @PostMapping("/redefinir-senha")

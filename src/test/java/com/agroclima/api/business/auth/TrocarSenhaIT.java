@@ -144,15 +144,42 @@ class TrocarSenhaIT extends IntegrationTestBase {
     }
 
     @Test
-    void qualquerUsuarioTrocaAPropriaSenhaInformandoAAtual() {
-        usuarioRepository.save(new Usuario("Normal", "normal@teste.com", passwordEncoder.encode("SenhaAtual123"), Papel.AGRONOMO));
-        String token = (String) dados(login("normal@teste.com", "SenhaAtual123")).get("token");
+    void gestorTrocaAPropriaSenhaInformandoAAtual() {
+        usuarioRepository.save(new Usuario("Gestor", "gestor@teste.com", passwordEncoder.encode("SenhaAtual123"), Papel.GESTOR_TECNOLOGIA));
+        String token = (String) dados(login("gestor@teste.com", "SenhaAtual123")).get("token");
 
         ResponseEntity<Map> resposta = trocar(token, "SenhaAtual123", "SenhaNova2026");
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(login("normal@teste.com", "SenhaNova2026").getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(login("normal@teste.com", "SenhaAtual123").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(login("gestor@teste.com", "SenhaNova2026").getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(login("gestor@teste.com", "SenhaAtual123").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void produtorEAgronomoNaoTrocamASenhaPorConta_SoOGestorRedefine() {
+        usuarioRepository.save(new Usuario("Prod", "prod@teste.com", passwordEncoder.encode("SenhaAtual123"), Papel.PRODUTOR_RURAL));
+        usuarioRepository.save(new Usuario("Agro", "agro@teste.com", passwordEncoder.encode("SenhaAtual123"), Papel.AGRONOMO));
+
+        for (String email : new String[] {"prod@teste.com", "agro@teste.com"}) {
+            String token = (String) dados(login(email, "SenhaAtual123")).get("token");
+
+            ResponseEntity<Map> resposta = trocar(token, "SenhaAtual123", "SenhaNova2026");
+
+            assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(login(email, "SenhaAtual123").getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    @Test
+    void agronomoComSenhaTemporariaDefineASenhaNoPrimeiroAcesso() {
+        usuarioRepository.save(Usuario.criadaPeloGestor("Agro", "agro-novo@teste.com", Papel.AGRONOMO,
+                passwordEncoder.encode(TEMPORARIA), Instant.now(), Instant.now().plus(Duration.ofDays(7))));
+        String token = (String) dados(login("agro-novo@teste.com", TEMPORARIA)).get("token");
+
+        ResponseEntity<Map> resposta = trocar(token, TEMPORARIA, "SenhaNova2026");
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(login("agro-novo@teste.com", "SenhaNova2026").getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test

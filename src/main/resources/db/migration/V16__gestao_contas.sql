@@ -8,6 +8,8 @@ ALTER TABLE usuarios
     ADD COLUMN versao_sessao INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN motivo_suspensao VARCHAR(500),
     ADD COLUMN suspensa_em TIMESTAMPTZ,
+    -- Produtor e agronomo que esqueceram a senha pedem na tela de login; o pedido aparece para o gestor.
+    ADD COLUMN senha_esquecida_em TIMESTAMPTZ,
     ALTER COLUMN senha_hash DROP NOT NULL,
     ADD CONSTRAINT ck_usuarios_status CHECK (status IN ('PENDENTE', 'ATIVA', 'SUSPENSA')),
     ADD CONSTRAINT ck_usuarios_pendente_sem_senha CHECK (status <> 'PENDENTE' OR senha_hash IS NULL),
@@ -24,7 +26,7 @@ CREATE TABLE auditoria_contas (
     detalhe VARCHAR(500),
     criado_em TIMESTAMPTZ NOT NULL,
     CONSTRAINT ck_auditoria_contas_acao CHECK (acao IN
-        ('CONFIRMAR', 'RECUSAR', 'CRIAR', 'SUSPENDER', 'REATIVAR', 'REDEFINIR_SENHA', 'EDITAR'))
+        ('CONFIRMAR', 'RECUSAR', 'CRIAR', 'SUSPENDER', 'REATIVAR', 'REDEFINIR_SENHA', 'EDITAR', 'SENHA_ESQUECIDA'))
 );
 
 CREATE INDEX ix_auditoria_contas_alvo_id ON auditoria_contas (alvo_id, criado_em DESC);

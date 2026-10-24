@@ -61,6 +61,10 @@ public class Usuario extends BaseModel<UUID> {
     @Column(name = "suspensa_em")
     private Instant suspensaEm;
 
+    /** Quando o produtor ou agronomo pediu nova senha na tela de login; nulo = sem pedido pendente. */
+    @Column(name = "senha_esquecida_em")
+    private Instant senhaEsquecidaEm;
+
     protected Usuario() {}
 
     public Usuario(String nome, String email, String senhaHash, Papel papel) {
@@ -106,6 +110,7 @@ public class Usuario extends BaseModel<UUID> {
 
     /** Nova senha temporaria: a anterior e as sessoes abertas deixam de valer. */
     public void definirSenhaTemporaria(String senhaTemporariaHash, Instant senhaExpiraEm) {
+        this.senhaEsquecidaEm = null;
         this.senhaHash = senhaTemporariaHash;
         this.precisaTrocarSenha = true;
         this.senhaTemporariaExpiraEm = senhaExpiraEm;
@@ -114,10 +119,23 @@ public class Usuario extends BaseModel<UUID> {
 
     /** A pessoa definiu a propria senha (primeiro acesso ou troca voluntaria). */
     public void trocarSenha(String novaSenhaHash) {
+        this.senhaEsquecidaEm = null;
         this.senhaHash = novaSenhaHash;
         this.precisaTrocarSenha = false;
         this.senhaTemporariaExpiraEm = null;
         this.versaoSessao++;
+    }
+
+    /** Registra o pedido de nova senha; um pedido repetido nao muda a data do primeiro. */
+    public void pedirNovaSenha(Instant agora) {
+        if (this.senhaEsquecidaEm == null) {
+            this.senhaEsquecidaEm = agora;
+        }
+    }
+
+    /** A pessoa lembrou da senha e entrou: o pedido de nova senha deixa de ser pendencia. */
+    public void limparPedidoDeNovaSenha() {
+        this.senhaEsquecidaEm = null;
     }
 
     public void suspender(String motivo, Instant agora) {
@@ -192,6 +210,10 @@ public class Usuario extends BaseModel<UUID> {
 
     public String getMotivoSuspensao() {
         return motivoSuspensao;
+    }
+
+    public Instant getSenhaEsquecidaEm() {
+        return senhaEsquecidaEm;
     }
 
     public Instant getSuspensaEm() {

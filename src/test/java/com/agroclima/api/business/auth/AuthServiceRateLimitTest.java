@@ -40,8 +40,9 @@ class AuthServiceRateLimitTest {
         when(jwt.criarToken(any(), any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(new JwtService.TokenGerado("t", Instant.now()));
         AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, tokens, mock(ConviteGestorRepository.class), encoder, jwt, email, props,
-                mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC());
-        usuario = new Usuario("Fulano", "fulano@x.com", encoder.encode("senha-correta"), Papel.PRODUTOR_RURAL);
+                mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC(),
+                mock(com.agroclima.api.business.usuario.AuditoriaContaRepository.class));
+        usuario = new Usuario("Fulano", "fulano@x.com", encoder.encode("senha-correta"), Papel.GESTOR_TECNOLOGIA);
         when(usuarios.findByEmail("fulano@x.com")).thenReturn(Optional.of(usuario));
     }
 
@@ -91,7 +92,7 @@ class AuthServiceRateLimitTest {
             falharLogin("fulano@x.com");
         }
 
-        assertEquals(Papel.PRODUTOR_RURAL, service.login("fulano@x.com", "senha-correta").papel());
+        assertEquals(Papel.GESTOR_TECNOLOGIA, service.login("fulano@x.com", "senha-correta").papel());
     }
 
     @Test

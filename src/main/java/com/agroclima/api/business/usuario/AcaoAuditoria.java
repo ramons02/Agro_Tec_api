@@ -8,5 +8,6 @@ public enum AcaoAuditoria {
     SUSPENDER,
     REATIVAR,
     REDEFINIR_SENHA,
-    EDITAR
+    EDITAR,
+    SENHA_ESQUECIDA
 }

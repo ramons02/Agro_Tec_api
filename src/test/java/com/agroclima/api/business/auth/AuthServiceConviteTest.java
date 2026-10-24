@@ -35,7 +35,8 @@ class AuthServiceConviteTest {
         AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, mock(TokenRecuperacaoSenhaRepository.class), convites,
                 new BCryptPasswordEncoder(), mock(JwtService.class), mock(EmailService.class), props,
-                mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC());
+                mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC(),
+                mock(com.agroclima.api.business.usuario.AuditoriaContaRepository.class));
         when(usuarios.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
     }
 

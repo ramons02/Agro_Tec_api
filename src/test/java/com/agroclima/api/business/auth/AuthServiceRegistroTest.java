@@ -35,7 +35,8 @@ class AuthServiceRegistroTest {
         AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, mock(TokenRecuperacaoSenhaRepository.class),
                 mock(ConviteGestorRepository.class), new BCryptPasswordEncoder(), mock(JwtService.class),
-                mock(EmailService.class), props, mock(EstadoContaCache.class), Clock.fixed(AGORA, ZoneOffset.UTC));
+                mock(EmailService.class), props, mock(EstadoContaCache.class), Clock.fixed(AGORA, ZoneOffset.UTC),
+                mock(com.agroclima.api.business.usuario.AuditoriaContaRepository.class));
         when(usuarios.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
     }
 

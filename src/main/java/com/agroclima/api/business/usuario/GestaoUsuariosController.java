@@ -48,11 +48,12 @@ public class GestaoUsuariosController {
             @AuthenticationPrincipal UsuarioAutenticado usuario,
             @RequestParam(required = false) Papel papel,
             @RequestParam(required = false) StatusConta status,
+            @RequestParam(name = "esqueceu_senha", defaultValue = "false") boolean esqueceuSenha,
             @RequestParam(name = "q", required = false) String busca,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(name = "page_size", defaultValue = "" + TAMANHO_PAGINA_PADRAO) int pageSize) {
         Page<GestaoUsuariosService.ItemUsuario> pagina =
-                gestaoUsuariosService.listar(usuario, papel, status, busca, page, pageSize);
+                gestaoUsuariosService.listar(usuario, papel, status, esqueceuSenha, busca, page, pageSize);
         return ApiEnvelope.sucesso(new PagedResponse<>(
                 pagina.getContent(), pagina.getTotalElements(), page, pagina.getPageable().getPageSize()));
     }

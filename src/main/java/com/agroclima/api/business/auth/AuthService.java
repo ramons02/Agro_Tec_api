@@ -1,5 +1,8 @@
 package com.agroclima.api.business.auth;
 
+import com.agroclima.api.business.usuario.AcaoAuditoria;
+import com.agroclima.api.business.usuario.AuditoriaConta;
+import com.agroclima.api.business.usuario.AuditoriaContaRepository;
 import com.agroclima.api.core.config.AppProperties;
 import com.agroclima.api.core.response.AppException;
 import com.agroclima.api.core.security.EstadoContaCache;
@@ -33,6 +36,7 @@ public class AuthService {
     private final AppProperties appProperties;
     private final EstadoContaCache estadoContaCache;
     private final Clock clock;
+    private final AuditoriaContaRepository auditoriaRepository;
     static final int SENHA_MINIMA = 8;
     private final SecureRandom secureRandom = new SecureRandom();
     // 5 logins errados por e-mail bloqueiam por 15 min; 3 pedidos de recuperacao por e-mail por hora.
@@ -50,7 +54,8 @@ public class AuthService {
             EmailService emailService,
             AppProperties appProperties,
             EstadoContaCache estadoContaCache,
-            Clock clock) {
+            Clock clock,
+            AuditoriaContaRepository auditoriaRepository) {
         this.usuarioRepository = usuarioRepository;
         this.tokenRepository = tokenRepository;
         this.conviteRepository = conviteRepository;
@@ -60,11 +65,12 @@ public class AuthService {
         this.appProperties = appProperties;
         this.estadoContaCache = estadoContaCache;
         this.clock = clock;
+        this.auditoriaRepository = auditoriaRepository;
     }
 
     public record LoginResultado(String token, Instant expiraEm, Papel papel, boolean precisaTrocarSenha) {}
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LoginResultado login(String email, String senha) {
         // Conta por e-mail exista ou nao o usuario, entao o 429 tambem nao revela se a conta existe.
         if (limiteLogin.bloqueado(email)) {
@@ -89,6 +95,10 @@ public class AuthService {
             throw new AppException(403, "Senha temporária expirada. Procure o administrador para redefinir.");
         }
         limiteLogin.limpar(email);
+        if (usuario.getSenhaEsquecidaEm() != null) {
+            usuario.limparPedidoDeNovaSenha();
+            usuarioRepository.save(usuario);
+        }
         // Com troca obrigatoria o token e restrito: so serve para definir a senha nova (POST /auth/trocar-senha).
         JwtService.TokenGerado tokenGerado = usuario.isPrecisaTrocarSenha()
                 ? jwtService.criarTokenRestrito(usuario.getId(), usuario.getPapel(), usuario.getVersaoSessao())
@@ -100,7 +110,7 @@ public class AuthService {
     public record SessaoRenovada(String token, Instant expiraEm, Papel papel) {}
 
     /**
-     * Primeiro acesso (senha atual = temporaria) e troca voluntaria: mesma regra. Sucesso limpa a troca
+     * Primeiro acesso (senha atual = temporaria, qualquer papel) e troca voluntaria (so gestor): mesma regra. Sucesso limpa a troca
      * obrigatoria e a expiracao, derruba as outras sessoes da conta (versao de sessao) e devolve token completo.
      */
     @Transactional
@@ -111,6 +121,11 @@ public class AuthService {
         }
         Usuario usuario = usuarioRepository.buscarParaAtualizar(solicitante.id())
                 .orElseThrow(() -> new AppException(401, "Token de autorização ausente ou expirado."));
+        // So o gestor troca a propria senha quando quiser; produtor e agronomo so a definem no primeiro acesso
+        // (senha temporaria) e, depois, quem redefine e o gestor.
+        if (!usuario.isPrecisaTrocarSenha() && usuario.getPapel() != Papel.GESTOR_TECNOLOGIA) {
+            throw new AppException(403, "Somente o administrador pode redefinir a sua senha.");
+        }
         // 400 e nao 401: o app trata 401 como sessao expirada e deslogaria quem so errou a senha atual.
         if (usuario.getSenhaHash() == null || !passwordEncoder.matches(senhaAtual, usuario.getSenhaHash())) {
             limiteTrocaSenha.registrarFalha(chave);
@@ -195,6 +210,23 @@ public class AuthService {
         if (usuario == null || usuario.getStatus() == StatusConta.PENDENTE) {
             // RF032 / anti-enumeracao: resposta ao endpoint e sempre a mesma, sem efeito colateral aqui.
             // Conta PENDENTE tambem nao recebe nada: ainda nao foi aprovada pelo administrador.
+            return;
+        }
+        if (usuario.getStatus() == StatusConta.SUSPENSA && usuario.getPapel() != Papel.GESTOR_TECNOLOGIA) {
+            // Conta suspensa nao entra: nao ha o que redefinir ate o gestor reativar.
+            return;
+        }
+        if (usuario.getPapel() != Papel.GESTOR_TECNOLOGIA) {
+            // Produtor e agronomo nao recebem link por e-mail: o pedido vira uma pendencia na tela do
+            // gestor, que gera a senha temporaria e a repassa. A resposta ao endpoint continua a mesma.
+            Instant agora = clock.instant();
+            boolean primeiroPedido = usuario.getSenhaEsquecidaEm() == null;
+            usuario.pedirNovaSenha(agora);
+            usuarioRepository.save(usuario);
+            if (primeiroPedido) {
+                auditoriaRepository.save(new AuditoriaConta(usuario.getId(), AcaoAuditoria.SENHA_ESQUECIDA,
+                        usuario.getId(), usuario.getEmail(), "pediu nova senha na tela de login", agora));
+            }
             return;
         }
         String token = gerarTokenOpaco();
