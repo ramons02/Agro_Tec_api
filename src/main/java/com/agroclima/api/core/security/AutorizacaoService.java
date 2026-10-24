@@ -49,6 +49,13 @@ public class AutorizacaoService {
         }
     }
 
+    /** Telas e dados de administracao (lista de usuarios) so para gestor; 403 explicito para os demais. */
+    public void exigirGestor(UsuarioAutenticado usuario) {
+        if (usuario.papel() != Papel.GESTOR_TECNOLOGIA) {
+            throw new AppException(403, "Somente gestor de tecnologia pode ver os usuários.");
+        }
+    }
+
     /** Optional.empty() = sem restricao (ve tudo, so GESTOR_TECNOLOGIA); presente = lista de ids visiveis. */
     public Optional<List<UUID>> propriedadeIdsVisiveis(UsuarioAutenticado usuario) {
         if (usuario.papel() == Papel.GESTOR_TECNOLOGIA) {
