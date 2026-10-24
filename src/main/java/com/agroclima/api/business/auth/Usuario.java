@@ -61,6 +61,10 @@ public class Usuario extends BaseModel<UUID> {
     @Column(name = "suspensa_em")
     private Instant suspensaEm;
 
+    /** Grupo (tenant) do produtor e do Admin; nulo para agronomo (usa agronomo_grupos) e para pendente sem grupo. */
+    @Column(name = "grupo_id")
+    private UUID grupoId;
+
     /** Quando o produtor ou agronomo pediu nova senha na tela de login; nulo = sem pedido pendente. */
     @Column(name = "senha_esquecida_em")
     private Instant senhaEsquecidaEm;
@@ -210,6 +214,14 @@ public class Usuario extends BaseModel<UUID> {
 
     public String getMotivoSuspensao() {
         return motivoSuspensao;
+    }
+
+    public UUID getGrupoId() {
+        return grupoId;
+    }
+
+    public void definirGrupo(UUID grupoId) {
+        this.grupoId = grupoId;
     }
 
     public Instant getSenhaEsquecidaEm() {
