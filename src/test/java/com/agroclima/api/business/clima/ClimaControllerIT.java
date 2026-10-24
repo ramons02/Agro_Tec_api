@@ -152,8 +152,21 @@ class ClimaControllerIT extends ClimaIntegrationTestBase {
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
-        // fallback bem-sucedido conta como leitura fresca -- AO_VIVO, igual ao Python.
-        assertThat(dados.get("fonte_dados")).isEqualTo("AO_VIVO");
+        // fallback bem-sucedido e leitura fresca, mas e valor de modelo, nunca medicao de estacao.
+        assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
+    }
+
+    @Test
+    void leituraDoFallbackLidaDepoisDoBancoContinuaPrevisaoENuncaViraAoVivo() {
+        stubInmetIndisponivel();
+        stubOpenMeteoComPrevisao();
+        String url = "/api/v1/clima/atual?talhao_id=" + talhaoId;
+
+        restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
+        ResponseEntity<Map> segunda = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
+
+        Map<String, Object> dados = (Map<String, Object>) segunda.getBody().get("dados");
+        assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
     }
 
     @Test
