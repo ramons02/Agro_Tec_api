@@ -33,6 +33,10 @@ services:
         sync: false
       - key: INMET_BASE_URL
         value: https://apitempo.inmet.gov.br
+      # Hoje as rotas de medicao do INMET nao devolvem dado (404/204). "false" faz a ingestao ir direto
+      # ao Open-Meteo, sem tentar o INMET a cada ciclo; o catalogo de estacoes segue lido.
+      - key: INMET_ENABLED
+        value: "true"
       # O Render usa IP de saida compartilhado que o Open-Meteo bloqueia (429); o trafego passa pelo
       # Worker da Cloudflare (Agro_Tec_infra/cloudflare-openmeteo-proxy), que exige X-Proxy-Key.
       - key: OPENMETEO_BASE_URL
