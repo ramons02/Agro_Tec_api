@@ -54,6 +54,6 @@ public abstract class IntegrationTestBase {
         jdbcTemplate.execute(
                 "TRUNCATE TABLE tokens_recuperacao_senha, vinculos_agronomo_propriedade, "
                         + "balanco_hidrico_diario, talhoes, propriedades, "
-                        + "cultura_kc, usuarios, auditoria_contas CASCADE");
+                        + "cultura_kc, usuarios, auditoria_contas, agronomo_grupos, grupos CASCADE");
     }
 }

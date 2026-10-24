@@ -1,6 +1,7 @@
 package com.agroclima.api.business.propriedade;
 
 import com.agroclima.api.business.auth.Papel;
+import com.agroclima.api.business.auth.UsuarioRepository;
 import com.agroclima.api.core.geo.GeoJsonUtil;
 import com.agroclima.api.core.geo.GeometriaUtil;
 import com.agroclima.api.core.response.AppException;
@@ -25,10 +26,15 @@ public class PropriedadeService {
 
     private final PropriedadeRepository propriedadeRepository;
     private final AutorizacaoService autorizacaoService;
+    private final UsuarioRepository usuarioRepository;
 
-    public PropriedadeService(PropriedadeRepository propriedadeRepository, AutorizacaoService autorizacaoService) {
+    public PropriedadeService(
+            PropriedadeRepository propriedadeRepository,
+            AutorizacaoService autorizacaoService,
+            UsuarioRepository usuarioRepository) {
         this.propriedadeRepository = propriedadeRepository;
         this.autorizacaoService = autorizacaoService;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Transactional
@@ -37,7 +43,10 @@ public class PropriedadeService {
             throw new AppException(403, "Agrônomos têm acesso somente leitura.", Map.of("papel", usuario.papel()));
         }
         MultiPolygon geometria = converterGeometria(geometriaNode);
-        return propriedadeRepository.save(new Propriedade(nome, municipio, usuario.id(), geometria));
+        Propriedade propriedade = new Propriedade(nome, municipio, usuario.id(), geometria);
+        // A propriedade nasce no grupo do dono (spec 024, FR-003); conta ainda sem grupo deixa o campo nulo.
+        usuarioRepository.findById(usuario.id()).ifPresent(dono -> propriedade.definirGrupo(dono.getGrupoId()));
+        return propriedadeRepository.save(propriedade);
     }
 
     @Transactional(readOnly = true)

@@ -24,6 +24,10 @@ public class Propriedade extends BaseModel<UUID> {
     @Column(name = "proprietario_id", nullable = false)
     private UUID proprietarioId;
 
+    /** Copia do grupo do dono, para filtrar por grupo em consulta simples (spec 024, R4). */
+    @Column(name = "grupo_id")
+    private UUID grupoId;
+
     private MultiPolygon geometria;
 
     protected Propriedade() {}
@@ -61,5 +65,13 @@ public class Propriedade extends BaseModel<UUID> {
 
     public MultiPolygon getGeometria() {
         return geometria;
+    }
+
+    public UUID getGrupoId() {
+        return grupoId;
+    }
+
+    public void definirGrupo(UUID grupoId) {
+        this.grupoId = grupoId;
     }
 }

@@ -56,8 +56,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ") && !ROTAS_PUBLICAS.contains(request.getRequestURI())) {
             try {
                 JwtService.TokenDecodificado token = jwtService.decodificarCompleto(header.substring(7));
-                UsuarioAutenticado usuario = token.usuario();
-                Optional<EstadoConta> estado = estadoContaCache.obter(usuario.id());
+                Optional<EstadoConta> estado = estadoContaCache.obter(token.usuario().id());
                 if (estado.isEmpty()
                         || estado.get().versaoSessao() != token.versaoSessao()
                         || estado.get().status() == StatusConta.PENDENTE) {
@@ -69,6 +68,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     recusar(response, "Troca de senha obrigatória.");
                     return;
                 } else {
+                    // O papel vem do banco, nao do token: se o papel da conta mudou depois da emissao do
+                    // token (spec 024, R9), vale o atual, e nao o que o token ainda diz.
+                    UsuarioAutenticado usuario = new UsuarioAutenticado(token.usuario().id(), estado.get().papel());
                     var authentication = new UsernamePasswordAuthenticationToken(
                             usuario, null, List.of(new SimpleGrantedAuthority("ROLE_" + usuario.papel().name())));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
