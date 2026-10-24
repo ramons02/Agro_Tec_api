@@ -129,6 +129,77 @@ class ImportacaoGeoServiceTest {
         assertThat(Math.abs(resultado.getEnvelopeInternal().getMinY())).isLessThan(90.0);
     }
 
+    /**
+     * Shapefile como o QGIS e o ArcGIS gravam: o .prj e o WKT ESRI de texto puro (sem codigo EPSG nem
+     * eixos), nao o CRS decodificado pelo GeoTools. A fixture do GeoTools acima nao cobre esse caminho.
+     */
+    private byte[] criarShapefileZipComPrjEsri(Polygon poligono, String prjEsri) throws Exception {
+        byte[] zipBase = criarShapefileZip(poligono, null);
+        ByteArrayOutputStream saida = new ByteArrayOutputStream();
+        try (java.util.zip.ZipInputStream entrada = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(zipBase));
+                ZipOutputStream zip = new ZipOutputStream(saida)) {
+            ZipEntry item;
+            while ((item = entrada.getNextEntry()) != null) {
+                if (item.getName().endsWith(".prj")) {
+                    continue;
+                }
+                zip.putNextEntry(new ZipEntry(item.getName()));
+                zip.write(entrada.readAllBytes());
+                zip.closeEntry();
+            }
+            zip.putNextEntry(new ZipEntry("talhao.prj"));
+            zip.write(prjEsri.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return saida.toByteArray();
+    }
+
+    private static final String PRJ_WGS84 = "GEOGCS[\"GCS_WGS_1984\",DATUM[\"D_WGS_1984\","
+            + "SPHEROID[\"WGS_1984\",6378137.0,298.257223563]],PRIMEM[\"Greenwich\",0.0],"
+            + "UNIT[\"Degree\",0.0174532925199433]]";
+
+    private static final String PRJ_SIRGAS2000_UTM22S = "PROJCS[\"SIRGAS_2000_UTM_Zone_22S\","
+            + "GEOGCS[\"GCS_SIRGAS_2000\",DATUM[\"D_SIRGAS_2000\",SPHEROID[\"GRS_1980\",6378137.0,298.257222101]],"
+            + "PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]],"
+            + "PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",500000.0],"
+            + "PARAMETER[\"False_Northing\",10000000.0],PARAMETER[\"Central_Meridian\",-51.0],"
+            + "PARAMETER[\"Scale_Factor\",0.9996],PARAMETER[\"Latitude_Of_Origin\",0.0],UNIT[\"Meter\",1.0]]";
+
+    @Test
+    void prjWgs84EmTextoEsriMantemLongitudeComoXELatitudeComoY() throws Exception {
+        Polygon original = quadrado(-48.50, -1.45, 0.01);
+
+        Geometry resultado = service.extrairGeometria("talhao.zip", criarShapefileZipComPrjEsri(original, PRJ_WGS84));
+
+        assertThat(resultado.getEnvelopeInternal().getMinX()).isCloseTo(-48.50, within(1e-6));
+        assertThat(resultado.getEnvelopeInternal().getMinY()).isCloseTo(-1.45, within(1e-6));
+        assertThat(resultado.getEnvelopeInternal().getMaxX()).isCloseTo(-48.49, within(1e-6));
+        assertThat(resultado.getEnvelopeInternal().getMaxY()).isCloseTo(-1.44, within(1e-6));
+    }
+
+    @Test
+    void reprojetaSirgas2000Utm22sParaLongitudeELatitudeNaOrdemCerta() throws Exception {
+        // Ponto perto de Belem (lon -48.49, lat -1.45) em SIRGAS 2000 / UTM 22S, calculado com o pyproj.
+        Polygon utm = quadrado(779301.16, 9839576.21, 1000.0);
+
+        Geometry resultado = service.extrairGeometria("talhao.zip",
+                criarShapefileZipComPrjEsri(utm, PRJ_SIRGAS2000_UTM22S));
+
+        assertThat(resultado.getEnvelopeInternal().getMinX()).isCloseTo(-48.49, within(1e-3));
+        assertThat(resultado.getEnvelopeInternal().getMinY()).isCloseTo(-1.45, within(1e-3));
+    }
+
+    @Test
+    void reprojecaoDeMercatorTambemDevolveLongitudeNoXELatitudeNoY() throws Exception {
+        // Ponto perto de Belem em EPSG:3857: (-5397882.11, -161430.49) = (lon -48.49, lat -1.45).
+        Polygon mercator = quadrado(-5397882.11, -161430.49, 1000.0);
+
+        Geometry resultado = service.extrairGeometria("talhao.zip", criarShapefileZip(mercator, "EPSG:3857"));
+
+        assertThat(resultado.getEnvelopeInternal().getMinX()).isCloseTo(-48.49, within(1e-3));
+        assertThat(resultado.getEnvelopeInternal().getMinY()).isCloseTo(-1.45, within(1e-3));
+    }
+
     @Test
     void rejeitaShpIsoladoSemArquivosCompanheiros() {
         byte[] shpSozinho = new byte[] {0x00, 0x00, 0x27, 0x0a};
