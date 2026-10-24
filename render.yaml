@@ -44,3 +44,7 @@ services:
         value: https://agroclima-openmeteo-proxy.cloudflare-openmeteo-proxy.workers.dev
       - key: OPENMETEO_PROXY_KEY
         sync: false
+      # MET Norway: reserva do Open-Meteo. Exige User-Agent que identifique o app com contato,
+      # ex.: "AgroClimaPara/1.0 (contato@seudominio.com.br)". Vazio usa um padrao com o repositorio.
+      - key: METNO_USER_AGENT
+        sync: false

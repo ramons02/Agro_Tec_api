@@ -170,6 +170,27 @@ class ClimaControllerIT extends ClimaIntegrationTestBase {
     }
 
     @Test
+    void climaAtualUsaMetNorwayQuandoInmetEOpenMeteoFalham() {
+        stubInmetIndisponivel();
+        stubOpenMeteoIndisponivel();
+        OPENMETEO_MOCK.stubFor(get(urlPathMatching("/weatherapi/locationforecast/2.0/complete.*")).willReturn(
+                aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(
+                        "{\"properties\":{\"timeseries\":[{\"time\":\"2026-10-24T19:00:00Z\",\"data\":{"
+                                + "\"instant\":{\"details\":{\"air_temperature\":29.7,\"relative_humidity\":70.8,"
+                                + "\"wind_speed\":5.0}},\"next_1_hours\":{\"details\":{\"precipitation_amount\":0.0}}}}]}}")));
+
+        ResponseEntity<Map> resposta = restTemplate.exchange(
+                "/api/v1/clima/atual?talhao_id=" + talhaoId, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
+        assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
+        assertThat(((Number) dados.get("temperatura_c")).doubleValue()).isEqualTo(29.7);
+        assertThat(((Number) dados.get("vento_kmh")).doubleValue()).isEqualTo(18.0);
+        assertThat(dados.get("rajada_kmh")).isNull();
+    }
+
+    @Test
     void climaAtualRetorna404QuandoInmetEOpenMeteoFalhamSemMedicaoPrevia() {
         stubInmetIndisponivel();
         stubOpenMeteoIndisponivel();
