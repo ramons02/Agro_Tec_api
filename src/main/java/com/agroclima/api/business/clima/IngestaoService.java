@@ -4,6 +4,7 @@ import com.agroclima.api.business.clima.clients.FonteIndisponivelException;
 import com.agroclima.api.business.clima.clients.FontePrevisaoIndisponivelException;
 import com.agroclima.api.business.clima.clients.InmetClient;
 import com.agroclima.api.business.clima.clients.MedicaoInmetDto;
+import com.agroclima.api.business.clima.clients.MetNorwayClient;
 import com.agroclima.api.business.clima.clients.OpenMeteoClient;
 import com.agroclima.api.business.clima.clients.PrevisaoClimatica;
 import com.agroclima.api.business.estacao.EstacaoInmet;
@@ -26,16 +27,19 @@ public class IngestaoService {
 
     private final InmetClient inmetClient;
     private final OpenMeteoClient openMeteoClient;
+    private final MetNorwayClient metNorwayClient;
     private final MedicaoClimaRepository medicaoClimaRepository;
     private final EstacaoInmetRepository estacaoInmetRepository;
 
     public IngestaoService(
             InmetClient inmetClient,
             OpenMeteoClient openMeteoClient,
+            MetNorwayClient metNorwayClient,
             MedicaoClimaRepository medicaoClimaRepository,
             EstacaoInmetRepository estacaoInmetRepository) {
         this.inmetClient = inmetClient;
         this.openMeteoClient = openMeteoClient;
+        this.metNorwayClient = metNorwayClient;
         this.medicaoClimaRepository = medicaoClimaRepository;
         this.estacaoInmetRepository = estacaoInmetRepository;
     }
@@ -62,17 +66,29 @@ public class IngestaoService {
         return ResultadoIngestao.SUCESSO;
     }
 
+    /** Cadeia de reserva sem INMET: Open-Meteo primeiro, MET Norway se ele falhar; ambos viram PREVISAO. */
     private ResultadoIngestao tentarFallbackOpenMeteo(EstacaoInmet estacao) {
+        double lat = estacao.getPosicao().getY();
+        double lon = estacao.getPosicao().getX();
         try {
-            PrevisaoClimatica previsao =
-                    openMeteoClient.obterPrevisao(estacao.getPosicao().getY(), estacao.getPosicao().getX());
+            PrevisaoClimatica previsao = openMeteoClient.obterPrevisao(lat, lon);
             medicaoClimaRepository.inserirSeNaoExistir(
                     estacao.getCodigo(), previsao.obtidoEmUtc(), null, previsao.temperatura2mC(),
                     previsao.umidadeAr2mPct(), previsao.vento10mKmh() / 3.6, previsao.rajada10mKmh() / 3.6,
                     FonteDados.PREVISAO.name());
             return ResultadoIngestao.FALLBACK;
         } catch (FontePrevisaoIndisponivelException ex) {
-            log.error("Fallback Open-Meteo também falhou para {}: {}", estacao.getCodigo(), ex.getMessage());
+            log.warn("Open-Meteo indisponível para {}: {} -- tentando MET Norway.", estacao.getCodigo(), ex.getMessage());
+        }
+        try {
+            MetNorwayClient.CondicaoAtual condicao = metNorwayClient.obterCondicaoAtual(lat, lon);
+            // Sem rajada: o MET Norway nao a fornece nos tropicos (fica nula, como o INMET podia deixar).
+            medicaoClimaRepository.inserirSeNaoExistir(
+                    estacao.getCodigo(), condicao.obtidoEmUtc(), condicao.precipitacaoMm(), condicao.temperaturaC(),
+                    condicao.umidadePct(), condicao.ventoMs(), null, FonteDados.PREVISAO.name());
+            return ResultadoIngestao.FALLBACK;
+        } catch (FontePrevisaoIndisponivelException ex) {
+            log.error("Open-Meteo e MET Norway falharam para {}: {}", estacao.getCodigo(), ex.getMessage());
             return ResultadoIngestao.FALHA_TOTAL;
         }
     }

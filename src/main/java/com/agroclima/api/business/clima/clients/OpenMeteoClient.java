@@ -53,6 +53,12 @@ public class OpenMeteoClient {
         this.restClient = builder.build();
     }
 
+    /** Para testes: os caches sao de singleton e atravessam testes que compartilham o contexto Spring. */
+    public void limparCaches() {
+        cache.invalidateAll();
+        cache10Dias.invalidateAll();
+    }
+
     public long contadorChamadasReais() {
         return contadorChamadasReais.get();
     }

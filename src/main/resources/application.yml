@@ -43,6 +43,9 @@ app:
   openmeteo:
     base-url: ${OPENMETEO_BASE_URL:https://api.open-meteo.com}
     proxy-key: ${OPENMETEO_PROXY_KEY:}
+  metno:
+    base-url: ${METNO_BASE_URL:https://api.met.no}
+    user-agent: ${METNO_USER_AGENT:}
   redis:
     url: ${REDIS_URL:}
   telegram:
