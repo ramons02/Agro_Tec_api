@@ -43,8 +43,8 @@ class TalhaoControllerIT extends IntegrationTestBase {
     private TalhaoRepository talhaoRepository;
 
     private String registrarELogar(String email, String papel) {
-        restTemplate.postForEntity("/api/v1/auth/registro",
-                Map.of("nome", "Usuario Teste", "email", email, "senha", "senha12345", "papel", papel), Map.class);
+        usuarioRepository.save(new Usuario("Usuario Teste", email, passwordEncoder.encode("senha12345"),
+                Papel.valueOf(papel)));
         ResponseEntity<Map> loginResposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", email, "senha", "senha12345"), Map.class);
         return (String) dados(loginResposta).get("token");

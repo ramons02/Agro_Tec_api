@@ -1,5 +1,6 @@
 package com.agroclima.api.business.telegram;
 
+import com.agroclima.api.business.auth.StatusConta;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
 import com.agroclima.api.business.propriedade.Propriedade;
@@ -93,7 +94,9 @@ public class AlertaPulverizacaoService {
         vinculoRepository.findByPropriedadeIdAndEstado(propriedade.getId(), EstadoVinculo.ACEITO)
                 .forEach(vinculo -> usuarioIds.add(vinculo.getAgronomoId()));
 
+        // Conta suspensa (ou ainda pendente) nao recebe alerta: so contas ATIVAS (spec 022, FR-017).
         return usuarioRepository.findAllById(usuarioIds).stream()
+                .filter(usuario -> usuario.getStatus() == StatusConta.ATIVA)
                 .map(Usuario::getTelegramChatId)
                 .filter(chatId -> chatId != null && !chatId.isBlank())
                 .toList();

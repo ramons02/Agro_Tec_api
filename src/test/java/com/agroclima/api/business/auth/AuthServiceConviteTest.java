@@ -34,7 +34,8 @@ class AuthServiceConviteTest {
         convites = mock(ConviteGestorRepository.class);
         AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, mock(TokenRecuperacaoSenhaRepository.class), convites,
-                new BCryptPasswordEncoder(), mock(JwtService.class), mock(EmailService.class), props);
+                new BCryptPasswordEncoder(), mock(JwtService.class), mock(EmailService.class), props,
+                mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC());
         when(usuarios.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
     }
 
@@ -107,8 +108,8 @@ class AuthServiceConviteTest {
     @Test
     void produtorEAgronomoRegistramSemConvite() {
         assertEquals(Papel.PRODUTOR_RURAL,
-                service.registrar("N", "p@x.com", "senha12345", Papel.PRODUTOR_RURAL, null).getPapel());
+                service.registrar("N", "p@x.com", null, Papel.PRODUTOR_RURAL, null).getPapel());
         assertEquals(Papel.AGRONOMO,
-                service.registrar("N", "a@x.com", "senha12345", Papel.AGRONOMO, null).getPapel());
+                service.registrar("N", "a@x.com", null, Papel.AGRONOMO, null).getPapel());
     }
 }
