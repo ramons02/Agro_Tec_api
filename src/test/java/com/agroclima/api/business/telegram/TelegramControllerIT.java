@@ -64,14 +64,38 @@ class TelegramControllerIT extends TelegramIntegrationTestBase {
         assertThat((String) dados.get("link")).startsWith("https://t.me/AgroClimaParaTesteBot?start=");
     }
 
+    private HttpHeaders headersWebhook(String segredo) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (segredo != null) {
+            headers.set("X-Telegram-Bot-Api-Secret-Token", segredo);
+        }
+        return headers;
+    }
+
+    @Test
+    void webhookSemSegredoERecusadoEnaoVinculaNada() {
+        String token = criarUsuarioEToken("dono-tg5@teste.com");
+        String tokenVinculo = gerarLinkENextrairToken(token);
+        String payload = "{\"message\":{\"chat\":{\"id\":777},\"text\":\"/start " + tokenVinculo + "\"}}";
+
+        ResponseEntity<Map> semHeader = restTemplate.postForEntity(
+                "/api/v1/telegram/webhook", new HttpEntity<>(payload, headersWebhook(null)), Map.class);
+        ResponseEntity<Map> headerErrado = restTemplate.postForEntity(
+                "/api/v1/telegram/webhook", new HttpEntity<>(payload, headersWebhook("errado")), Map.class);
+
+        assertThat(semHeader.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(headerErrado.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(usuarioRepository.findByEmail("dono-tg5@teste.com").orElseThrow().getTelegramChatId()).isNull();
+    }
+
     @Test
     void webhookComTokenValidoVinculaChatId() {
         String token = criarUsuarioEToken("dono-tg2@teste.com");
         Usuario usuario = usuarioRepository.findByEmail("dono-tg2@teste.com").orElseThrow();
         String tokenVinculo = gerarLinkENextrairToken(token);
 
-        HttpHeaders headersJson = new HttpHeaders();
-        headersJson.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headersJson = headersWebhook(SEGREDO_WEBHOOK);
         String payload = "{\"message\":{\"chat\":{\"id\":123456789},\"text\":\"/start " + tokenVinculo + "\"}}";
 
         ResponseEntity<Map> resposta = restTemplate.postForEntity(
@@ -85,8 +109,7 @@ class TelegramControllerIT extends TelegramIntegrationTestBase {
 
     @Test
     void webhookComTokenInvalidoNaoVinculaNadaEAindaRespondeOk() {
-        HttpHeaders headersJson = new HttpHeaders();
-        headersJson.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headersJson = headersWebhook(SEGREDO_WEBHOOK);
         String payload = "{\"message\":{\"chat\":{\"id\":999},\"text\":\"/start token-que-nao-existe\"}}";
 
         ResponseEntity<Map> resposta = restTemplate.postForEntity(
@@ -100,8 +123,7 @@ class TelegramControllerIT extends TelegramIntegrationTestBase {
     void tokenDeVinculoJaUsadoNaoVinculaDeNovo() {
         String token = criarUsuarioEToken("dono-tg3@teste.com");
         String tokenVinculo = gerarLinkENextrairToken(token);
-        HttpHeaders headersJson = new HttpHeaders();
-        headersJson.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headersJson = headersWebhook(SEGREDO_WEBHOOK);
         String payload = "{\"message\":{\"chat\":{\"id\":111},\"text\":\"/start " + tokenVinculo + "\"}}";
         restTemplate.postForEntity("/api/v1/telegram/webhook", new HttpEntity<>(payload, headersJson), Map.class);
 

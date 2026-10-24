@@ -11,6 +11,8 @@ import org.springframework.test.context.DynamicPropertySource;
  * um bot-token/bot-username fake pra forcar HttpTelegramClient em vez de LogTelegramClient. */
 public abstract class TelegramIntegrationTestBase extends ClimaIntegrationTestBase {
 
+    protected static final String SEGREDO_WEBHOOK = "segredo-webhook-de-teste";
+
     protected static final WireMockServer TELEGRAM_MOCK =
             new WireMockServer(WireMockConfiguration.options().dynamicPort());
 
@@ -23,6 +25,7 @@ public abstract class TelegramIntegrationTestBase extends ClimaIntegrationTestBa
         registry.add("app.telegram.base-url", TELEGRAM_MOCK::baseUrl);
         registry.add("app.telegram.bot-token", () -> "token-de-teste");
         registry.add("app.telegram.bot-username", () -> "AgroClimaParaTesteBot");
+        registry.add("app.telegram.webhook-secret", () -> SEGREDO_WEBHOOK);
     }
 
     @BeforeEach
