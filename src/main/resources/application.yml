@@ -30,6 +30,8 @@ app:
   cors:
     origins: ${CORS_ORIGINS:http://localhost:5180}
     origin-regex: ${CORS_ORIGIN_REGEX:}
+  cadastro:
+    limite-por-hora: ${CADASTRO_LIMITE_POR_HORA:3}
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5180}
   smtp:
     host: ${SMTP_HOST:}

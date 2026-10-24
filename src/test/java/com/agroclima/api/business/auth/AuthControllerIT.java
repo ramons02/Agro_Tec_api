@@ -27,9 +27,15 @@ class AuthControllerIT extends IntegrationTestBase {
     @Autowired
     private TokenRecuperacaoSenhaRepository tokenRepository;
 
-    private ResponseEntity<Map> registrar(String nome, String email, String senha, String papel) {
+    /** Cadastro publico: sem senha (a conta nasce PENDENTE). */
+    private ResponseEntity<Map> registrar(String nome, String email, String papel) {
         return restTemplate.postForEntity("/api/v1/auth/registro",
-                Map.of("nome", nome, "email", email, "senha", senha, "papel", papel), Map.class);
+                Map.of("nome", nome, "email", email, "papel", papel), Map.class);
+    }
+
+    /** Conta ja ATIVA com senha conhecida, gravada direto (o cadastro publico agora so cria PENDENTE). */
+    private void contaAtiva(String nome, String email, String senha, Papel papel) {
+        usuarioRepository.save(new Usuario(nome, email, passwordEncoder.encode(senha), papel));
     }
 
     @SuppressWarnings("unchecked")
@@ -61,7 +67,9 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void registroPublicoDeGestorSemConviteERecusado() {
-        ResponseEntity<Map> resposta = registrar("Intruso", "intruso@teste.com", "senha12345", "GESTOR_TECNOLOGIA");
+        ResponseEntity<Map> resposta = restTemplate.postForEntity("/api/v1/auth/registro",
+                Map.of("nome", "Intruso", "email", "intruso@teste.com", "senha", "senha12345",
+                        "papel", "GESTOR_TECNOLOGIA"), Map.class);
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(usuarioRepository.findByEmail("intruso@teste.com")).isEmpty();
@@ -69,7 +77,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void produtorNaoConsegueCriarConviteDeGestor() {
-        registrar("Prod", "prod-conv@teste.com", "senha12345", "PRODUTOR_RURAL");
+        contaAtiva("Prod", "prod-conv@teste.com", "senha12345", Papel.PRODUTOR_RURAL);
 
         ResponseEntity<Map> resposta = criarConvite(loginToken("prod-conv@teste.com", "senha12345"), "x@teste.com");
 
@@ -102,22 +110,25 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void registraUsuarioComSucesso() {
-        ResponseEntity<Map> resposta = registrar("Produtor Teste", "produtor@teste.com", "senha12345", "PRODUTOR_RURAL");
+        ResponseEntity<Map> resposta = registrar("Produtor Teste", "produtor@teste.com", "PRODUTOR_RURAL");
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(dados(resposta).get("email")).isEqualTo("produtor@teste.com");
-        assertThat(dados(resposta).get("papel")).isEqualTo("PRODUTOR_RURAL");
+        assertThat(dados(resposta).get("mensagem")).isEqualTo("Cadastro recebido, aguarde a confirmação.");
+        Usuario criado = usuarioRepository.findByEmail("produtor@teste.com").orElseThrow();
+        assertThat(criado.getStatus()).isEqualTo(StatusConta.PENDENTE);
+        assertThat(criado.getSenhaHash()).isNull();
+        assertThat(criado.getPapel()).isEqualTo(Papel.PRODUTOR_RURAL);
     }
 
     @Test
     void registraComEmailDuplicadoRetorna409() {
-        registrar("Produtor Um", "duplicado@teste.com", "senha12345", "PRODUTOR_RURAL");
-        ResponseEntity<Map> resposta = registrar("Produtor Dois", "duplicado@teste.com", "outrasenha1", "PRODUTOR_RURAL");
+        registrar("Produtor Um", "duplicado@teste.com", "PRODUTOR_RURAL");
+        ResponseEntity<Map> resposta = registrar("Produtor Dois", "Duplicado@Teste.com", "PRODUTOR_RURAL");
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     }
 
     @Test
     void loginComCredenciaisValidasRetornaToken() {
-        registrar("Login Teste", "login@teste.com", "senha12345", "PRODUTOR_RURAL");
+        contaAtiva("Login Teste", "login@teste.com", "senha12345", Papel.PRODUTOR_RURAL);
         ResponseEntity<Map> resposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", "login@teste.com", "senha", "senha12345"), Map.class);
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -127,7 +138,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void loginComSenhaErradaRetorna401ComMensagemGenerica() {
-        registrar("Senha Errada", "senhaerrada@teste.com", "senhacerta1", "PRODUTOR_RURAL");
+        contaAtiva("Senha Errada", "senhaerrada@teste.com", "senhacerta1", Papel.PRODUTOR_RURAL);
         ResponseEntity<Map> resposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", "senhaerrada@teste.com", "senha", "senhaerrada1"), Map.class);
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -144,7 +155,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void meComTokenValidoRetornaUsuario() {
-        registrar("Me Teste", "me@teste.com", "senha12345", "PRODUTOR_RURAL");
+        contaAtiva("Me Teste", "me@teste.com", "senha12345", Papel.PRODUTOR_RURAL);
         ResponseEntity<Map> loginResposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", "me@teste.com", "senha", "senha12345"), Map.class);
         String token = (String) dados(loginResposta).get("token");
@@ -166,7 +177,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void recuperarSenhaRetornaMensagemIdenticaExistaOuNaoOEmail() {
-        registrar("Recupera Teste", "recupera@teste.com", "senha12345", "PRODUTOR_RURAL");
+        contaAtiva("Recupera Teste", "recupera@teste.com", "senha12345", Papel.PRODUTOR_RURAL);
 
         ResponseEntity<Map> comEmail = restTemplate.postForEntity(
                 "/api/v1/auth/recuperar-senha", Map.of("email", "recupera@teste.com"), Map.class);
@@ -181,7 +192,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void redefinirSenhaComTokenValidoTrocaSenha() {
-        registrar("Redefine Teste", "redefine@teste.com", "senhaAntiga1", "PRODUTOR_RURAL");
+        contaAtiva("Redefine Teste", "redefine@teste.com", "senhaAntiga1", Papel.PRODUTOR_RURAL);
         restTemplate.postForEntity("/api/v1/auth/recuperar-senha", Map.of("email", "redefine@teste.com"), Map.class);
         String token = tokenRepository.findAll().get(0).getToken();
 
@@ -200,7 +211,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void redefinirSenhaComTokenJaUsadoFalha() {
-        registrar("Token Usado", "tokenusado@teste.com", "senhaOriginal1", "PRODUTOR_RURAL");
+        contaAtiva("Token Usado", "tokenusado@teste.com", "senhaOriginal1", Papel.PRODUTOR_RURAL);
         restTemplate.postForEntity("/api/v1/auth/recuperar-senha", Map.of("email", "tokenusado@teste.com"), Map.class);
         String token = tokenRepository.findAll().get(0).getToken();
 

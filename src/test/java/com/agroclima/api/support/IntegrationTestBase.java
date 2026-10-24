@@ -25,6 +25,9 @@ public abstract class IntegrationTestBase {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private com.agroclima.api.core.security.LimitadorCadastro limitadorCadastro;
+
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
@@ -46,9 +49,11 @@ public abstract class IntegrationTestBase {
      */
     @BeforeEach
     void limparTudo() {
+        // O limite de cadastros por hora e em memoria e todos os testes chegam do mesmo IP.
+        limitadorCadastro.reiniciar();
         jdbcTemplate.execute(
                 "TRUNCATE TABLE tokens_recuperacao_senha, vinculos_agronomo_propriedade, "
                         + "balanco_hidrico_diario, talhoes, propriedades, "
-                        + "cultura_kc, usuarios CASCADE");
+                        + "cultura_kc, usuarios, auditoria_contas CASCADE");
     }
 }

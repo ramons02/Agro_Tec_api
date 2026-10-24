@@ -37,9 +37,10 @@ class AuthServiceRateLimitTest {
         email = mock(EmailService.class);
         PasswordEncoder encoder = new BCryptPasswordEncoder();
         JwtService jwt = mock(JwtService.class);
-        when(jwt.criarToken(any(), any())).thenReturn(new JwtService.TokenGerado("t", Instant.now()));
+        when(jwt.criarToken(any(), any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(new JwtService.TokenGerado("t", Instant.now()));
         AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
-        service = new AuthService(usuarios, tokens, mock(ConviteGestorRepository.class), encoder, jwt, email, props);
+        service = new AuthService(usuarios, tokens, mock(ConviteGestorRepository.class), encoder, jwt, email, props,
+                mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC());
         usuario = new Usuario("Fulano", "fulano@x.com", encoder.encode("senha-correta"), Papel.PRODUTOR_RURAL);
         when(usuarios.findByEmail("fulano@x.com")).thenReturn(Optional.of(usuario));
     }

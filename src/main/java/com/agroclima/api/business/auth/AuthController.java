@@ -1,7 +1,10 @@
 package com.agroclima.api.business.auth;
 
 import com.agroclima.api.core.response.ApiEnvelope;
+import com.agroclima.api.core.response.AppException;
+import com.agroclima.api.core.security.LimitadorCadastro;
 import com.agroclima.api.core.security.UsuarioAutenticado;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -24,9 +27,11 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final LimitadorCadastro limitadorCadastro;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, LimitadorCadastro limitadorCadastro) {
         this.authService = authService;
+        this.limitadorCadastro = limitadorCadastro;
     }
 
     public record LoginRequest(@Email @NotBlank String email, @NotBlank String senha) {}
@@ -37,6 +42,8 @@ public class AuthController {
             @Size(min = 8) String senha,
             @NotNull Papel papel,
             String convite) {}
+
+    public record TrocarSenhaRequest(@NotBlank String senhaAtual, @Size(min = 8) String senhaNova) {}
 
     public record ConviteGestorRequest(@Email @NotBlank String email) {}
 
@@ -50,7 +57,8 @@ public class AuthController {
         return ApiEnvelope.sucesso(Map.of(
                 "token", resultado.token(),
                 "expira_em", resultado.expiraEm().toString(),
-                "papel", resultado.papel()));
+                "papel", resultado.papel(),
+                "precisa_trocar_senha", resultado.precisaTrocarSenha()));
     }
 
     @GetMapping("/me")
@@ -61,15 +69,34 @@ public class AuthController {
     }
 
     @PostMapping("/registro")
-    public ResponseEntity<ApiEnvelope<Map<String, Object>>> registro(@Valid @RequestBody RegistroRequest requisicao) {
+    public ResponseEntity<ApiEnvelope<Map<String, Object>>> registro(
+            @Valid @RequestBody RegistroRequest requisicao, HttpServletRequest http) {
+        if (!limitadorCadastro.consumir(origemDaRequisicao(http))) {
+            throw new AppException(429, "Muitas tentativas de cadastro. Tente novamente mais tarde.");
+        }
         Usuario usuario = authService.registrar(
                 requisicao.nome(), requisicao.email(), requisicao.senha(), requisicao.papel(), requisicao.convite());
-        Map<String, Object> dados = Map.of(
-                "id", usuario.getId().toString(),
-                "nome", usuario.getNome(),
-                "email", usuario.getEmail(),
-                "papel", usuario.getPapel());
+        Map<String, Object> dados = usuario.getStatus() == StatusConta.PENDENTE
+                ? Map.of("mensagem", "Cadastro recebido, aguarde a confirmação.", "status", usuario.getStatus())
+                : Map.of(
+                        "id", usuario.getId().toString(),
+                        "nome", usuario.getNome(),
+                        "email", usuario.getEmail(),
+                        "papel", usuario.getPapel());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.sucesso(dados));
+    }
+
+    /**
+     * IP do cliente. Atras do proxy do Render usa a ultima entrada de X-Forwarded-For, a que o proprio
+     * proxy acrescentou (as anteriores podem ser forjadas pelo cliente); sem o cabecalho, o IP da conexao.
+     */
+    private static String origemDaRequisicao(HttpServletRequest http) {
+        String encaminhado = http.getHeader("X-Forwarded-For");
+        if (encaminhado != null && !encaminhado.isBlank()) {
+            String[] entradas = encaminhado.split(",");
+            return entradas[entradas.length - 1].trim();
+        }
+        return http.getRemoteAddr();
     }
 
     @PostMapping("/convites-gestor")
@@ -79,6 +106,18 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.sucesso(Map.of(
                 "link", convite.link(),
                 "expira_em", convite.expiraEm().toString())));
+    }
+
+    /** Aceita tambem o token restrito do primeiro acesso (unica rota que ele alcanca). */
+    @PostMapping("/trocar-senha")
+    public ApiEnvelope<Map<String, Object>> trocarSenha(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @Valid @RequestBody TrocarSenhaRequest requisicao) {
+        AuthService.SessaoRenovada sessao =
+                authService.trocarSenha(usuario, requisicao.senhaAtual(), requisicao.senhaNova());
+        return ApiEnvelope.sucesso(Map.of(
+                "token", sessao.token(),
+                "expira_em", sessao.expiraEm().toString(),
+                "papel", sessao.papel()));
     }
 
     @PostMapping("/recuperar-senha")

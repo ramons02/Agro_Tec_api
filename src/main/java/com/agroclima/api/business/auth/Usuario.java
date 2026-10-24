@@ -25,7 +25,8 @@ public class Usuario extends BaseModel<UUID> {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "senha_hash", nullable = false)
+    /** null apenas enquanto a conta esta PENDENTE (sem senha utilizavel). */
+    @Column(name = "senha_hash")
     private String senhaHash;
 
     @Enumerated(EnumType.STRING)
@@ -40,6 +41,26 @@ public class Usuario extends BaseModel<UUID> {
     @Column(name = "telegram_chat_id")
     private String telegramChatId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private StatusConta status = StatusConta.ATIVA;
+
+    @Column(name = "precisa_trocar_senha", nullable = false)
+    private boolean precisaTrocarSenha;
+
+    @Column(name = "senha_temporaria_expira_em")
+    private Instant senhaTemporariaExpiraEm;
+
+    /** Incrementa quando as sessoes abertas devem cair; o token carrega o valor (claim ver). */
+    @Column(name = "versao_sessao", nullable = false)
+    private int versaoSessao;
+
+    @Column(name = "motivo_suspensao")
+    private String motivoSuspensao;
+
+    @Column(name = "suspensa_em")
+    private Instant suspensaEm;
+
     protected Usuario() {}
 
     public Usuario(String nome, String email, String senhaHash, Papel papel) {
@@ -51,8 +72,73 @@ public class Usuario extends BaseModel<UUID> {
         this.criadoEm = Instant.now();
     }
 
+    /** Cadastro aberto: conta sem senha, aguardando a confirmacao do gestor. */
+    public static Usuario pendente(String nome, String email, Papel papel, Instant agora) {
+        Usuario usuario = new Usuario(nome, email, null, papel);
+        usuario.status = StatusConta.PENDENTE;
+        usuario.criadoEm = agora;
+        return usuario;
+    }
+
+    /** Conta criada direto pelo gestor: ja ATIVA, com senha temporaria e troca obrigatoria. */
+    public static Usuario criadaPeloGestor(String nome, String email, Papel papel, String senhaTemporariaHash,
+            Instant agora, Instant senhaExpiraEm) {
+        Usuario usuario = new Usuario(nome, email, senhaTemporariaHash, papel);
+        usuario.criadoEm = agora;
+        usuario.precisaTrocarSenha = true;
+        usuario.senhaTemporariaExpiraEm = senhaExpiraEm;
+        return usuario;
+    }
+
+    /** Recuperacao de senha por e-mail (HU-13): a pessoa escolheu a senha, entao nao ha troca obrigatoria. */
     public void atualizarSenha(String novaSenhaHash) {
         this.senhaHash = novaSenhaHash;
+        this.precisaTrocarSenha = false;
+        this.senhaTemporariaExpiraEm = null;
+        this.versaoSessao++;
+    }
+
+    /** PENDENTE -> ATIVA, com senha temporaria e troca obrigatoria. */
+    public void confirmar(String senhaTemporariaHash, Instant senhaExpiraEm) {
+        this.status = StatusConta.ATIVA;
+        definirSenhaTemporaria(senhaTemporariaHash, senhaExpiraEm);
+    }
+
+    /** Nova senha temporaria: a anterior e as sessoes abertas deixam de valer. */
+    public void definirSenhaTemporaria(String senhaTemporariaHash, Instant senhaExpiraEm) {
+        this.senhaHash = senhaTemporariaHash;
+        this.precisaTrocarSenha = true;
+        this.senhaTemporariaExpiraEm = senhaExpiraEm;
+        this.versaoSessao++;
+    }
+
+    /** A pessoa definiu a propria senha (primeiro acesso ou troca voluntaria). */
+    public void trocarSenha(String novaSenhaHash) {
+        this.senhaHash = novaSenhaHash;
+        this.precisaTrocarSenha = false;
+        this.senhaTemporariaExpiraEm = null;
+        this.versaoSessao++;
+    }
+
+    public void suspender(String motivo, Instant agora) {
+        this.status = StatusConta.SUSPENSA;
+        this.motivoSuspensao = motivo;
+        this.suspensaEm = agora;
+    }
+
+    public void reativar() {
+        this.status = StatusConta.ATIVA;
+        this.motivoSuspensao = null;
+        this.suspensaEm = null;
+    }
+
+    /** Trocar o e-mail derruba as sessoes abertas (a versao de sessao muda). */
+    public void atualizarNomeEmail(String novoNome, String novoEmail) {
+        this.nome = novoNome;
+        if (!this.email.equalsIgnoreCase(novoEmail)) {
+            this.versaoSessao++;
+        }
+        this.email = novoEmail;
     }
 
     public void vincularTelegram(String chatId) {
@@ -86,6 +172,30 @@ public class Usuario extends BaseModel<UUID> {
 
     public Instant getCriadoEm() {
         return criadoEm;
+    }
+
+    public StatusConta getStatus() {
+        return status;
+    }
+
+    public boolean isPrecisaTrocarSenha() {
+        return precisaTrocarSenha;
+    }
+
+    public Instant getSenhaTemporariaExpiraEm() {
+        return senhaTemporariaExpiraEm;
+    }
+
+    public int getVersaoSessao() {
+        return versaoSessao;
+    }
+
+    public String getMotivoSuspensao() {
+        return motivoSuspensao;
+    }
+
+    public Instant getSuspensaEm() {
+        return suspensaEm;
     }
 
     public String getTelegramChatId() {

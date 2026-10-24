@@ -2,6 +2,7 @@ package com.agroclima.api.business.auth;
 
 import com.agroclima.api.core.config.AppProperties;
 import com.agroclima.api.core.response.AppException;
+import com.agroclima.api.core.security.EstadoContaCache;
 import com.agroclima.api.core.security.JwtService;
 import com.agroclima.api.core.security.LimitadorTentativas;
 import com.agroclima.api.core.security.UsuarioAutenticado;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -29,10 +31,15 @@ public class AuthService {
     private final JwtService jwtService;
     private final EmailService emailService;
     private final AppProperties appProperties;
+    private final EstadoContaCache estadoContaCache;
+    private final Clock clock;
+    static final int SENHA_MINIMA = 8;
     private final SecureRandom secureRandom = new SecureRandom();
     // 5 logins errados por e-mail bloqueiam por 15 min; 3 pedidos de recuperacao por e-mail por hora.
     private final LimitadorTentativas limiteLogin = new LimitadorTentativas(5, Duration.ofMinutes(15));
     private final LimitadorTentativas limiteRecuperacao = new LimitadorTentativas(3, Duration.ofHours(1));
+    // 5 senhas atuais erradas por conta em 15 min: quem roubou um token nao descobre a senha por tentativa e erro.
+    private final LimitadorTentativas limiteTrocaSenha = new LimitadorTentativas(5, Duration.ofMinutes(15));
 
     public AuthService(
             UsuarioRepository usuarioRepository,
@@ -41,7 +48,9 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             EmailService emailService,
-            AppProperties appProperties) {
+            AppProperties appProperties,
+            EstadoContaCache estadoContaCache,
+            Clock clock) {
         this.usuarioRepository = usuarioRepository;
         this.tokenRepository = tokenRepository;
         this.conviteRepository = conviteRepository;
@@ -49,9 +58,11 @@ public class AuthService {
         this.jwtService = jwtService;
         this.emailService = emailService;
         this.appProperties = appProperties;
+        this.estadoContaCache = estadoContaCache;
+        this.clock = clock;
     }
 
-    public record LoginResultado(String token, Instant expiraEm, Papel papel) {}
+    public record LoginResultado(String token, Instant expiraEm, Papel papel, boolean precisaTrocarSenha) {}
 
     @Transactional(readOnly = true)
     public LoginResultado login(String email, String senha) {
@@ -61,25 +72,81 @@ public class AuthService {
         }
         Usuario usuario = usuarioRepository.findByEmail(email).orElse(null);
         // Mesma mensagem genérica pra usuário inexistente e senha errada -- nunca revela qual das duas.
-        if (usuario == null || !passwordEncoder.matches(senha, usuario.getSenhaHash())) {
+        // Conta PENDENTE nao tem senha: e indistinguivel de e-mail inexistente (nao revela que a conta existe).
+        if (usuario == null
+                || usuario.getStatus() == StatusConta.PENDENTE
+                || usuario.getSenhaHash() == null
+                || !passwordEncoder.matches(senha, usuario.getSenhaHash())) {
             limiteLogin.registrarFalha(email);
             throw new AppException(401, "Usuário ou senha inválidos.");
         }
+        // Estados so sao revelados depois da senha correta, para o login nao confirmar quais e-mails existem.
+        if (usuario.getStatus() == StatusConta.SUSPENSA) {
+            throw new AppException(403, "Conta suspensa. Procure o administrador.");
+        }
+        Instant expiraSenhaTemporaria = usuario.getSenhaTemporariaExpiraEm();
+        if (expiraSenhaTemporaria != null && expiraSenhaTemporaria.isBefore(clock.instant())) {
+            throw new AppException(403, "Senha temporária expirada. Procure o administrador para redefinir.");
+        }
         limiteLogin.limpar(email);
-        JwtService.TokenGerado tokenGerado = jwtService.criarToken(usuario.getId(), usuario.getPapel());
-        return new LoginResultado(tokenGerado.token(), tokenGerado.expiraEm(), usuario.getPapel());
+        // Com troca obrigatoria o token e restrito: so serve para definir a senha nova (POST /auth/trocar-senha).
+        JwtService.TokenGerado tokenGerado = usuario.isPrecisaTrocarSenha()
+                ? jwtService.criarTokenRestrito(usuario.getId(), usuario.getPapel(), usuario.getVersaoSessao())
+                : jwtService.criarToken(usuario.getId(), usuario.getPapel(), usuario.getVersaoSessao());
+        return new LoginResultado(
+                tokenGerado.token(), tokenGerado.expiraEm(), usuario.getPapel(), usuario.isPrecisaTrocarSenha());
+    }
+
+    public record SessaoRenovada(String token, Instant expiraEm, Papel papel) {}
+
+    /**
+     * Primeiro acesso (senha atual = temporaria) e troca voluntaria: mesma regra. Sucesso limpa a troca
+     * obrigatoria e a expiracao, derruba as outras sessoes da conta (versao de sessao) e devolve token completo.
+     */
+    @Transactional
+    public SessaoRenovada trocarSenha(UsuarioAutenticado solicitante, String senhaAtual, String senhaNova) {
+        String chave = solicitante.id().toString();
+        if (limiteTrocaSenha.bloqueado(chave)) {
+            throw new AppException(429, "Muitas tentativas. Tente novamente em alguns minutos.");
+        }
+        Usuario usuario = usuarioRepository.buscarParaAtualizar(solicitante.id())
+                .orElseThrow(() -> new AppException(401, "Token de autorização ausente ou expirado."));
+        // 400 e nao 401: o app trata 401 como sessao expirada e deslogaria quem so errou a senha atual.
+        if (usuario.getSenhaHash() == null || !passwordEncoder.matches(senhaAtual, usuario.getSenhaHash())) {
+            limiteTrocaSenha.registrarFalha(chave);
+            throw new AppException(400, "Senha atual incorreta.");
+        }
+        if (senhaAtual.equals(senhaNova)) {
+            throw new AppException(400, "A senha nova precisa ser diferente da atual.");
+        }
+        limiteTrocaSenha.limpar(chave);
+        usuario.trocarSenha(passwordEncoder.encode(senhaNova));
+        usuarioRepository.save(usuario);
+        estadoContaCache.invalidar(usuario.getId());
+        JwtService.TokenGerado token = jwtService.criarToken(usuario.getId(), usuario.getPapel(), usuario.getVersaoSessao());
+        return new SessaoRenovada(token.token(), token.expiraEm(), usuario.getPapel());
     }
 
     @Transactional
     public Usuario registrar(String nome, String email, String senha, Papel papel, String convite) {
-        if (papel == Papel.GESTOR_TECNOLOGIA) {
+        boolean gestor = papel == Papel.GESTOR_TECNOLOGIA;
+        if (gestor) {
             // Registro publico nunca cria gestor sem convite valido (uso unico, amarrado ao e-mail).
             consumirConviteGestor(convite, email);
+            if (senha == null || senha.length() < SENHA_MINIMA) {
+                throw new AppException(400, "Informe uma senha com no mínimo " + SENHA_MINIMA + " caracteres.");
+            }
+        } else if (senha != null && !senha.isBlank()) {
+            throw new AppException(400,
+                    "O cadastro não recebe senha: o administrador gera uma senha temporária ao confirmar a conta.");
         }
-        if (usuarioRepository.existsByEmail(email)) {
+        if (usuarioRepository.existsByEmailIgnoreCase(email.trim())) {
             throw new AppException(409, "Email já cadastrado.");
         }
-        Usuario usuario = new Usuario(nome, email, passwordEncoder.encode(senha), papel);
+        // Gestor (por convite) escolhe a senha e ja entra ATIVO; os demais ficam PENDENTES, sem senha.
+        Usuario usuario = gestor
+                ? new Usuario(nome, email, passwordEncoder.encode(senha), papel)
+                : Usuario.pendente(nome, email, papel, clock.instant());
         return usuarioRepository.save(usuario);
     }
 
@@ -125,8 +192,9 @@ public class AuthService {
             return;
         }
         Usuario usuario = usuarioRepository.findByEmail(email).orElse(null);
-        if (usuario == null) {
+        if (usuario == null || usuario.getStatus() == StatusConta.PENDENTE) {
             // RF032 / anti-enumeracao: resposta ao endpoint e sempre a mesma, sem efeito colateral aqui.
+            // Conta PENDENTE tambem nao recebe nada: ainda nao foi aprovada pelo administrador.
             return;
         }
         String token = gerarTokenOpaco();
@@ -144,10 +212,16 @@ public class AuthService {
         }
         Usuario usuario = usuarioRepository.findById(tokenEntity.getUsuarioId())
                 .orElseThrow(() -> new AppException(400, "Link de redefinição inválido ou expirado. Solicite um novo."));
+        if (usuario.getStatus() == StatusConta.PENDENTE) {
+            // Mesmo um token forjado ou antigo nao pode dar senha a quem o administrador ainda nao aprovou.
+            throw new AppException(400, "Link de redefinição inválido ou expirado. Solicite um novo.");
+        }
+        // Conta SUSPENSA pode definir a senha, mas continua suspensa (o login segue negado).
         usuario.atualizarSenha(passwordEncoder.encode(novaSenha));
         tokenEntity.marcarUsado(agora);
         usuarioRepository.save(usuario);
         tokenRepository.save(tokenEntity);
+        estadoContaCache.invalidar(usuario.getId());
     }
 
     private String gerarTokenOpaco() {
