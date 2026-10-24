@@ -41,7 +41,7 @@ class AuthServiceConviteTest {
     }
 
     private String criarConviteEDevolverToken(String email) {
-        UsuarioAutenticado gestor = new UsuarioAutenticado(UUID.randomUUID(), Papel.GESTOR_TECNOLOGIA);
+        UsuarioAutenticado gestor = new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN_MASTER);
         AuthService.ConviteCriado criado = service.criarConviteGestor(gestor, email);
         return criado.link().substring(criado.link().indexOf("convite=") + 8);
     }

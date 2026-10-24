@@ -3,6 +3,9 @@ package com.agroclima.api.business.usuario;
 import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
+import com.agroclima.api.business.grupo.Grupo;
+import com.agroclima.api.business.grupo.GrupoRepository;
+import com.agroclima.api.support.GruposDeTeste;
 import com.agroclima.api.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,12 +36,18 @@ abstract class GestaoContasITBase extends IntegrationTestBase {
     @Autowired
     protected PasswordEncoder passwordEncoder;
 
+    @Autowired
+    protected GrupoRepository grupoRepository;
+
+    protected Grupo grupoInicial;
     protected Usuario gestor;
     protected String tokenGestor;
 
     @BeforeEach
     void prepararGestor() {
-        gestor = conta("gestor@teste.com", Papel.GESTOR_TECNOLOGIA);
+        gestor = conta("gestor@teste.com", Papel.ADMIN_MASTER);
+        // O Master gere o grupo inicial: contas criadas ou confirmadas sem grupo explicito caem nele.
+        grupoInicial = GruposDeTeste.criarGrupo(grupoRepository, usuarioRepository, "Grupo inicial", gestor);
         tokenGestor = login("gestor@teste.com", SENHA);
     }
 

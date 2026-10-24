@@ -49,11 +49,12 @@ public class GestaoUsuariosController {
             @RequestParam(required = false) Papel papel,
             @RequestParam(required = false) StatusConta status,
             @RequestParam(name = "esqueceu_senha", defaultValue = "false") boolean esqueceuSenha,
+            @RequestParam(name = "grupo_id", required = false) UUID grupoId,
             @RequestParam(name = "q", required = false) String busca,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(name = "page_size", defaultValue = "" + TAMANHO_PAGINA_PADRAO) int pageSize) {
         Page<GestaoUsuariosService.ItemUsuario> pagina =
-                gestaoUsuariosService.listar(usuario, papel, status, esqueceuSenha, busca, page, pageSize);
+                gestaoUsuariosService.listar(usuario, papel, status, esqueceuSenha, grupoId, busca, page, pageSize);
         return ApiEnvelope.sucesso(new PagedResponse<>(
                 pagina.getContent(), pagina.getTotalElements(), page, pagina.getPageable().getPageSize()));
     }
@@ -66,8 +67,11 @@ public class GestaoUsuariosController {
     /** Confirma o cadastro pendente; a resposta traz a senha temporaria, que nunca mais aparece. */
     @PostMapping("/{id}/confirmar")
     public ResponseEntity<ApiEnvelope<GestaoUsuariosService.SenhaTemporariaGerada>> confirmar(
-            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
-        return semCache(ApiEnvelope.sucesso(gestaoUsuariosService.confirmar(usuario, id)));
+            @AuthenticationPrincipal UsuarioAutenticado usuario,
+            @PathVariable UUID id,
+            @RequestBody(required = false) ConfirmarRequest requisicao) {
+        UUID grupoId = requisicao == null ? null : requisicao.grupoId();
+        return semCache(ApiEnvelope.sucesso(gestaoUsuariosService.confirmar(usuario, id, grupoId)));
     }
 
     /** Recusar apaga o cadastro pendente. */
@@ -78,7 +82,12 @@ public class GestaoUsuariosController {
     }
 
     public record NovoUsuarioRequest(
-            @NotBlank @Size(max = 255) String nome, @Email @NotBlank String email, @NotNull Papel papel) {}
+            @NotBlank @Size(max = 255) String nome,
+            @Email @NotBlank String email,
+            @NotNull Papel papel,
+            UUID grupoId) {}
+
+    public record ConfirmarRequest(UUID grupoId) {}
 
     public record EditarRequest(@Size(max = 255) String nome, @Email String email) {}
 
@@ -92,7 +101,8 @@ public class GestaoUsuariosController {
     @PostMapping
     public ResponseEntity<ApiEnvelope<GestaoUsuariosService.SenhaTemporariaGerada>> criar(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @Valid @RequestBody NovoUsuarioRequest requisicao) {
-        var gerada = gestaoUsuariosService.criar(usuario, requisicao.nome(), requisicao.email(), requisicao.papel());
+        var gerada = gestaoUsuariosService.criar(
+                usuario, requisicao.nome(), requisicao.email(), requisicao.papel(), requisicao.grupoId());
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ApiEnvelope.sucesso(gerada));
     }
 

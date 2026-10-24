@@ -9,5 +9,10 @@ public enum Papel {
     PRODUTOR_RURAL,
     AGRONOMO,
     GESTOR_TECNOLOGIA,
-    ADMIN_MASTER
+    ADMIN_MASTER;
+
+    /** Admin de grupo ou Master: quem administra contas. Produtor e agronomo nunca. */
+    public boolean ehGestor() {
+        return this == GESTOR_TECNOLOGIA || this == ADMIN_MASTER;
+    }
 }

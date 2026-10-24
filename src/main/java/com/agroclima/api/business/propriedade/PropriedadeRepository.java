@@ -22,4 +22,12 @@ public interface PropriedadeRepository extends JpaRepository<Propriedade, UUID> 
 
     @Query("SELECT p.id FROM Propriedade p WHERE p.proprietarioId = :proprietarioId")
     List<UUID> findIdByProprietarioId(@Param("proprietarioId") UUID proprietarioId);
+
+    /** Propriedades de um grupo (Admin ve o grupo todo; spec 024). */
+    @Query("SELECT p.id FROM Propriedade p WHERE p.grupoId = :grupoId")
+    List<UUID> findIdByGrupoId(@Param("grupoId") UUID grupoId);
+
+    /** Dos ids dados, os que estao em algum dos grupos (agronomo ve so o vinculado e do grupo dele). */
+    @Query("SELECT p.id FROM Propriedade p WHERE p.id IN :ids AND p.grupoId IN :grupos")
+    List<UUID> findIdByIdInAndGrupoIdIn(@Param("ids") Collection<UUID> ids, @Param("grupos") Collection<UUID> grupos);
 }
