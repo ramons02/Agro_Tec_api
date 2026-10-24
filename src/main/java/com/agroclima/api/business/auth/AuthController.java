@@ -35,7 +35,10 @@ public class AuthController {
             @NotBlank String nome,
             @Email @NotBlank String email,
             @Size(min = 8) String senha,
-            @NotNull Papel papel) {}
+            @NotNull Papel papel,
+            String convite) {}
+
+    public record ConviteGestorRequest(@Email @NotBlank String email) {}
 
     public record RecuperarSenhaRequest(@Email @NotBlank String email) {}
 
@@ -60,13 +63,22 @@ public class AuthController {
     @PostMapping("/registro")
     public ResponseEntity<ApiEnvelope<Map<String, Object>>> registro(@Valid @RequestBody RegistroRequest requisicao) {
         Usuario usuario = authService.registrar(
-                requisicao.nome(), requisicao.email(), requisicao.senha(), requisicao.papel());
+                requisicao.nome(), requisicao.email(), requisicao.senha(), requisicao.papel(), requisicao.convite());
         Map<String, Object> dados = Map.of(
                 "id", usuario.getId().toString(),
                 "nome", usuario.getNome(),
                 "email", usuario.getEmail(),
                 "papel", usuario.getPapel());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.sucesso(dados));
+    }
+
+    @PostMapping("/convites-gestor")
+    public ResponseEntity<ApiEnvelope<Map<String, Object>>> convidarGestor(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @Valid @RequestBody ConviteGestorRequest requisicao) {
+        AuthService.ConviteCriado convite = authService.criarConviteGestor(usuario, requisicao.email());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.sucesso(Map.of(
+                "link", convite.link(),
+                "expira_em", convite.expiraEm().toString())));
     }
 
     @PostMapping("/recuperar-senha")

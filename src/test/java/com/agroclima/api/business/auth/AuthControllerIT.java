@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Map;
 
@@ -34,6 +35,69 @@ class AuthControllerIT extends IntegrationTestBase {
     @SuppressWarnings("unchecked")
     private Map<String, Object> dados(ResponseEntity<Map> resposta) {
         return (Map<String, Object>) resposta.getBody().get("dados");
+    }
+
+    private String loginToken(String email, String senha) {
+        ResponseEntity<Map> login = restTemplate.postForEntity("/api/v1/auth/login",
+                Map.of("email", email, "senha", senha), Map.class);
+        return (String) dados(login).get("token");
+    }
+
+    private ResponseEntity<Map> criarConvite(String tokenGestor, String emailConvidado) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenGestor);
+        return restTemplate.exchange("/api/v1/auth/convites-gestor", HttpMethod.POST,
+                new HttpEntity<>(Map.of("email", emailConvidado), headers), Map.class);
+    }
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private String tokenDeGestorExistente(String email) {
+        usuarioRepository.save(new Usuario("Gestor Semente", email, passwordEncoder.encode("senha12345"),
+                Papel.GESTOR_TECNOLOGIA));
+        return loginToken(email, "senha12345");
+    }
+
+    @Test
+    void registroPublicoDeGestorSemConviteERecusado() {
+        ResponseEntity<Map> resposta = registrar("Intruso", "intruso@teste.com", "senha12345", "GESTOR_TECNOLOGIA");
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(usuarioRepository.findByEmail("intruso@teste.com")).isEmpty();
+    }
+
+    @Test
+    void produtorNaoConsegueCriarConviteDeGestor() {
+        registrar("Prod", "prod-conv@teste.com", "senha12345", "PRODUTOR_RURAL");
+
+        ResponseEntity<Map> resposta = criarConvite(loginToken("prod-conv@teste.com", "senha12345"), "x@teste.com");
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void conviteDeGestorPermiteUmUnicoCadastroParaOEmailConvidado() {
+        String tokenGestor = tokenDeGestorExistente("gestor-semente@teste.com");
+        ResponseEntity<Map> convite = criarConvite(tokenGestor, "novo-gestor@teste.com");
+        assertThat(convite.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String link = (String) dados(convite).get("link");
+        String conviteToken = link.substring(link.indexOf("convite=") + "convite=".length());
+
+        Map<String, Object> corpo = Map.of("nome", "Novo Gestor", "email", "novo-gestor@teste.com",
+                "senha", "senha12345", "papel", "GESTOR_TECNOLOGIA", "convite", conviteToken);
+        ResponseEntity<Map> outroEmail = restTemplate.postForEntity("/api/v1/auth/registro",
+                Map.of("nome", "Outro", "email", "outro@teste.com", "senha", "senha12345",
+                        "papel", "GESTOR_TECNOLOGIA", "convite", conviteToken), Map.class);
+        ResponseEntity<Map> primeiro = restTemplate.postForEntity("/api/v1/auth/registro", corpo, Map.class);
+        ResponseEntity<Map> reuso = restTemplate.postForEntity("/api/v1/auth/registro",
+                Map.of("nome", "Novo Gestor", "email", "novo-gestor@teste.com", "senha", "senha12345",
+                        "papel", "GESTOR_TECNOLOGIA", "convite", conviteToken), Map.class);
+
+        assertThat(outroEmail.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(primeiro.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(dados(primeiro).get("papel")).isEqualTo("GESTOR_TECNOLOGIA");
+        assertThat(reuso.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -80,7 +144,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void meComTokenValidoRetornaUsuario() {
-        registrar("Me Teste", "me@teste.com", "senha12345", "GESTOR_TECNOLOGIA");
+        registrar("Me Teste", "me@teste.com", "senha12345", "PRODUTOR_RURAL");
         ResponseEntity<Map> loginResposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", "me@teste.com", "senha", "senha12345"), Map.class);
         String token = (String) dados(loginResposta).get("token");
@@ -90,7 +154,7 @@ class AuthControllerIT extends IntegrationTestBase {
         ResponseEntity<Map> resposta = restTemplate.exchange(
                 "/api/v1/auth/me", HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(dados(resposta).get("papel")).isEqualTo("GESTOR_TECNOLOGIA");
+        assertThat(dados(resposta).get("papel")).isEqualTo("PRODUTOR_RURAL");
     }
 
     @Test
