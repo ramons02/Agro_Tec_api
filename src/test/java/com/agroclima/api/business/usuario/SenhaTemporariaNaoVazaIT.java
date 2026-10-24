@@ -20,8 +20,7 @@ class SenhaTemporariaNaoVazaIT extends GestaoContasITBase {
 
     @Test
     void confirmarCriarERedefinirNaoEscrevemASenhaNoLog(CapturedOutput saida) {
-        Usuario pendente = usuarioRepository.save(
-                Usuario.pendente("Pendente", "pend@teste.com", Papel.PRODUTOR_RURAL, Instant.now()));
+        Usuario pendente = pendenteNoGrupo("pend@teste.com");
         Usuario ativa = conta("ativa@teste.com", Papel.AGRONOMO);
 
         String confirmada = senhaDe(chamar(HttpMethod.POST, "/api/v1/usuarios/" + pendente.getId() + "/confirmar", tokenGestor, null));
@@ -34,8 +33,7 @@ class SenhaTemporariaNaoVazaIT extends GestaoContasITBase {
 
     @Test
     void nenhumaConsultaPosteriorDevolveASenha() {
-        Usuario pendente = usuarioRepository.save(
-                Usuario.pendente("Pendente", "pend2@teste.com", Papel.PRODUTOR_RURAL, Instant.now()));
+        Usuario pendente = pendenteNoGrupo("pend2@teste.com");
         String senha = senhaDe(chamar(HttpMethod.POST, "/api/v1/usuarios/" + pendente.getId() + "/confirmar", tokenGestor, null));
 
         String lista = chamar(HttpMethod.GET, "/api/v1/usuarios", tokenGestor, null).getBody().toString();
@@ -45,6 +43,13 @@ class SenhaTemporariaNaoVazaIT extends GestaoContasITBase {
         assertThat(lista).doesNotContain(senha);
         assertThat(detalhe).doesNotContain(senha);
         assertThat(resumo).doesNotContain(senha);
+    }
+
+    // Como se tivesse chegado pelo link do grupo: o Master so confirma pendente sem grupo escolhendo um.
+    private Usuario pendenteNoGrupo(String email) {
+        Usuario pendente = Usuario.pendente("Pendente", email, Papel.PRODUTOR_RURAL, Instant.now());
+        pendente.definirGrupo(grupoInicial.getId());
+        return usuarioRepository.save(pendente);
     }
 
     private String senhaDe(ResponseEntity<Map> resposta) {

@@ -225,10 +225,15 @@ public class GestaoUsuariosService {
         String senha = geradorSenha.gerar();
         Instant agora = clock.instant();
         Instant expiraEm = agora.plus(VALIDADE_SENHA_TEMPORARIA);
-        // Cadastro que chegou sem grupo: o Master escolhe (ou fica o grupo dele); o Admin so enxerga os do grupo dele.
-        UUID grupo = usuario.getGrupoId() != null ? usuario.getGrupoId() : grupoDaNovaConta(solicitante, grupoId);
+        // Cadastro que chegou pelo link do grupo ja tem grupo (o Admin dele confirma). Sem grupo, so o Master ve e
+        // precisa escolher um: nao ha grupo padrao (spec 024, FR-008).
+        boolean temGrupo = usuario.getGrupoId() != null
+                || (usuario.getPapel() == Papel.AGRONOMO && participacaoRepository.countByIdAgronomoId(usuario.getId()) > 0);
+        UUID grupo = temGrupo ? null : grupoEscolhido(grupoId);
         usuario.confirmar(passwordEncoder.encode(senha), expiraEm);
-        colocarNoGrupo(usuario, grupo, agora);
+        if (!temGrupo) {
+            colocarNoGrupo(usuario, grupo, agora);
+        }
         usuarioRepository.save(usuario);
         registrar(solicitante, AcaoAuditoria.CONFIRMAR, usuario, null, agora);
         estadoContaCache.invalidar(usuario.getId());
@@ -443,6 +448,17 @@ public class GestaoUsuariosService {
             throw new AppException(404, "Grupo não encontrado.");
         }
         return grupo;
+    }
+
+    /** Grupo informado pelo Master ao confirmar um cadastro sem grupo: obrigatorio e precisa existir. */
+    private UUID grupoEscolhido(UUID grupoId) {
+        if (grupoId == null) {
+            throw new AppException(422, "Informe o grupo da conta.");
+        }
+        if (!grupoRepository.existsById(grupoId)) {
+            throw new AppException(404, "Grupo não encontrado.");
+        }
+        return grupoId;
     }
 
     /** Produtor guarda o grupo na conta; agronomo ganha uma participacao (pode ter varias). */

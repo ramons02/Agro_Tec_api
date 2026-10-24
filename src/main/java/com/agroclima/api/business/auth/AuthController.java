@@ -1,5 +1,6 @@
 package com.agroclima.api.business.auth;
 
+import com.agroclima.api.business.grupo.GrupoService;
 import com.agroclima.api.core.response.ApiEnvelope;
 import com.agroclima.api.core.response.AppException;
 import com.agroclima.api.core.security.LimitadorCadastro;
@@ -28,10 +29,12 @@ public class AuthController {
 
     private final AuthService authService;
     private final LimitadorCadastro limitadorCadastro;
+    private final GrupoService grupoService;
 
-    public AuthController(AuthService authService, LimitadorCadastro limitadorCadastro) {
+    public AuthController(AuthService authService, LimitadorCadastro limitadorCadastro, GrupoService grupoService) {
         this.authService = authService;
         this.limitadorCadastro = limitadorCadastro;
+        this.grupoService = grupoService;
     }
 
     public record LoginRequest(@Email @NotBlank String email, @NotBlank String senha) {}
@@ -41,7 +44,9 @@ public class AuthController {
             @Email @NotBlank String email,
             @Size(min = 8) String senha,
             @NotNull Papel papel,
-            String convite) {}
+            String convite,
+            /** Codigo do link de cadastro do grupo (opcional): a conta nasce pendente nesse grupo. */
+            String grupo) {}
 
     public record TrocarSenhaRequest(@NotBlank String senhaAtual, @Size(min = 8) String senhaNova) {}
 
@@ -74,8 +79,11 @@ public class AuthController {
         if (!limitadorCadastro.consumir(origemDaRequisicao(http))) {
             throw new AppException(429, "Muitas tentativas de cadastro. Tente novamente mais tarde.");
         }
-        Usuario usuario = authService.registrar(
-                requisicao.nome(), requisicao.email(), requisicao.senha(), requisicao.papel(), requisicao.convite());
+        boolean pelaLink = requisicao.grupo() != null && !requisicao.grupo().isBlank();
+        // Link invalido ou substituido e recusado antes de criar qualquer conta.
+        java.util.UUID grupoId = pelaLink ? grupoService.resolverLink(requisicao.grupo()) : null;
+        Usuario usuario = authService.registrar(requisicao.nome(), requisicao.email(), requisicao.senha(),
+                requisicao.papel(), requisicao.convite(), grupoId);
         Map<String, Object> dados = usuario.getStatus() == StatusConta.PENDENTE
                 ? Map.of("mensagem", "Cadastro recebido, aguarde a confirmação.", "status", usuario.getStatus())
                 : Map.of(

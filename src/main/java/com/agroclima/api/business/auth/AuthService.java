@@ -3,6 +3,8 @@ package com.agroclima.api.business.auth;
 import com.agroclima.api.business.usuario.AcaoAuditoria;
 import com.agroclima.api.business.usuario.AuditoriaConta;
 import com.agroclima.api.business.usuario.AuditoriaContaRepository;
+import com.agroclima.api.business.grupo.ParticipacaoAgronomo;
+import com.agroclima.api.business.grupo.ParticipacaoAgronomoRepository;
 import com.agroclima.api.core.config.AppProperties;
 import com.agroclima.api.core.response.AppException;
 import com.agroclima.api.core.security.EstadoContaCache;
@@ -22,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 /** Espelha os 4 endpoints de auth.py: login, registro, recuperar-senha, redefinir-senha. */
 @Service
@@ -37,6 +40,7 @@ public class AuthService {
     private final EstadoContaCache estadoContaCache;
     private final Clock clock;
     private final AuditoriaContaRepository auditoriaRepository;
+    private final ParticipacaoAgronomoRepository participacaoRepository;
     static final int SENHA_MINIMA = 8;
     private final SecureRandom secureRandom = new SecureRandom();
     // 5 logins errados por e-mail bloqueiam por 15 min; 3 pedidos de recuperacao por e-mail por hora.
@@ -55,7 +59,9 @@ public class AuthService {
             AppProperties appProperties,
             EstadoContaCache estadoContaCache,
             Clock clock,
-            AuditoriaContaRepository auditoriaRepository) {
+            AuditoriaContaRepository auditoriaRepository,
+            ParticipacaoAgronomoRepository participacaoRepository) {
+        this.participacaoRepository = participacaoRepository;
         this.usuarioRepository = usuarioRepository;
         this.tokenRepository = tokenRepository;
         this.conviteRepository = conviteRepository;
@@ -144,6 +150,15 @@ public class AuthService {
 
     @Transactional
     public Usuario registrar(String nome, String email, String senha, Papel papel, String convite) {
+        return registrar(nome, email, senha, papel, convite, null);
+    }
+
+    /**
+     * grupoId (opcional) vem do link de cadastro do grupo, ja validado: a conta nasce pendente nesse grupo, visivel ao
+     * Admin dele e ao Master (spec 024, FR-009). Sem ele, pendente sem grupo: so o Master ve e atribui o grupo.
+     */
+    @Transactional
+    public Usuario registrar(String nome, String email, String senha, Papel papel, String convite, UUID grupoId) {
         if (papel == Papel.GESTOR_TECNOLOGIA) {
             // Admin nasce por criacao direta do Master (spec 024); nem o cadastro nem convite criam Admin.
             throw new AppException(403, "O Admin de um grupo é criado pelo administrador da plataforma.");
@@ -166,7 +181,14 @@ public class AuthService {
         Usuario usuario = gestor
                 ? new Usuario(nome, email, passwordEncoder.encode(senha), papel)
                 : Usuario.pendente(nome, email, papel, clock.instant());
-        return usuarioRepository.save(usuario);
+        if (!gestor && grupoId != null && papel == Papel.PRODUTOR_RURAL) {
+            usuario.definirGrupo(grupoId);
+        }
+        Usuario salvo = usuarioRepository.save(usuario);
+        if (!gestor && grupoId != null && papel == Papel.AGRONOMO) {
+            participacaoRepository.save(new ParticipacaoAgronomo(salvo.getId(), grupoId, clock.instant()));
+        }
+        return salvo;
     }
 
     public record ConviteCriado(String link, Instant expiraEm) {}

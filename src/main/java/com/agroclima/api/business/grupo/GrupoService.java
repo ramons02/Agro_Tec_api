@@ -9,6 +9,7 @@ import com.agroclima.api.business.usuario.AcaoAuditoria;
 import com.agroclima.api.business.usuario.AuditoriaConta;
 import com.agroclima.api.business.usuario.AuditoriaContaRepository;
 import com.agroclima.api.business.vinculo.VinculoAgronomoPropriedadeRepository;
+import com.agroclima.api.core.config.AppProperties;
 import com.agroclima.api.core.response.AppException;
 import com.agroclima.api.core.security.AutorizacaoService;
 import com.agroclima.api.core.security.EstadoContaCache;
@@ -53,6 +54,7 @@ public class GrupoService {
     private final PasswordEncoder passwordEncoder;
     private final GeradorSenhaTemporaria geradorSenha;
     private final Clock clock;
+    private final AppProperties appProperties;
     private final SecureRandom random = new SecureRandom();
 
     public GrupoService(
@@ -66,7 +68,9 @@ public class GrupoService {
             EstadoContaCache estadoContaCache,
             PasswordEncoder passwordEncoder,
             GeradorSenhaTemporaria geradorSenha,
-            Clock clock) {
+            Clock clock,
+            AppProperties appProperties) {
+        this.appProperties = appProperties;
         this.grupoRepository = grupoRepository;
         this.participacaoRepository = participacaoRepository;
         this.usuarioRepository = usuarioRepository;
@@ -89,6 +93,9 @@ public class GrupoService {
             UUID id, String nome, AdminResumo admin, String senhaTemporaria, Instant senhaTemporariaExpiraEm) {}
 
     public record ResultadoReatribuicao(int produtores, int agronomos) {}
+
+    /** Resposta de POST /grupos/{id}/novo-link: o link aparece so aqui; depois so existe o hash. */
+    public record NovoLink(String link, Instant geradoEm) {}
 
     /** Master: todos os grupos; Admin: o dele. */
     @Transactional(readOnly = true)
@@ -231,6 +238,41 @@ public class GrupoService {
                         emailAdmin, produtores + " produtores e " + agronomos + " agrônomos: " + detalhe, agora)
                 .comGrupo(origem.getId()));
         return new ResultadoReatribuicao(produtores, agronomos);
+    }
+
+    /**
+     * Gera um novo link de cadastro do grupo: o anterior para de valer na hora (so o hash do codigo atual existe).
+     * Master (qualquer grupo) ou Admin do grupo; outro Admin recebe 404, como se o grupo nao existisse.
+     */
+    @Transactional
+    public NovoLink gerarNovoLink(UsuarioAutenticado solicitante, UUID grupoId) {
+        autorizacaoService.exigirGestor(solicitante);
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new AppException(404, "Grupo não encontrado."));
+        if (!autorizacaoService.ehMaster(solicitante)
+                && !autorizacaoService.grupoDe(solicitante).map(g -> g.equals(grupo.getId())).orElse(false)) {
+            throw new AppException(404, "Grupo não encontrado.");
+        }
+        String codigo = codigoAleatorio();
+        Instant agora = clock.instant();
+        grupo.renovarCodigoCadastro(hashDe(codigo), agora);
+        grupoRepository.save(grupo);
+        String emailAdmin = usuarioRepository.findById(grupo.getAdminId()).map(Usuario::getEmail).orElse("");
+        auditoriaRepository.save(new AuditoriaConta(solicitante.id(), AcaoAuditoria.NOVO_LINK_GRUPO, grupo.getAdminId(),
+                        emailAdmin, "novo link de cadastro de " + grupo.getNome(), agora)
+                .comGrupo(grupo.getId()));
+        return new NovoLink(appProperties.frontendBaseUrl() + "/#/cadastro?grupo=" + codigo, agora);
+    }
+
+    /** Grupo do link de cadastro, ou 404 para link desconhecido ou substituido (nao revela qual dos dois). */
+    @Transactional(readOnly = true)
+    public UUID resolverLink(String codigo) {
+        if (codigo == null || codigo.isBlank()) {
+            throw new AppException(404, "Link de cadastro inválido ou substituído.");
+        }
+        return grupoRepository.findByCodigoCadastroHash(hashDe(codigo.trim()))
+                .map(Grupo::getId)
+                .orElseThrow(() -> new AppException(404, "Link de cadastro inválido ou substituído."));
     }
 
     /** Tira o agronomo do grupo e encerra os vinculos dele com as propriedades do grupo. Master ou Admin do grupo. */

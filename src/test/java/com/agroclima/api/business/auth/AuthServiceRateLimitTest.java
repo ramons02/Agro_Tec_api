@@ -41,7 +41,8 @@ class AuthServiceRateLimitTest {
         AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, tokens, mock(ConviteGestorRepository.class), encoder, jwt, email, props,
                 mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC(),
-                mock(com.agroclima.api.business.usuario.AuditoriaContaRepository.class));
+                mock(com.agroclima.api.business.usuario.AuditoriaContaRepository.class),
+                mock(com.agroclima.api.business.grupo.ParticipacaoAgronomoRepository.class));
         usuario = new Usuario("Fulano", "fulano@x.com", encoder.encode("senha-correta"), Papel.GESTOR_TECNOLOGIA);
         when(usuarios.findByEmail("fulano@x.com")).thenReturn(Optional.of(usuario));
     }

@@ -78,7 +78,8 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "POST /api/v1/grupos",
             "POST /api/v1/usuarios/{id}/mover",
             "POST /api/v1/grupos/{id}/reatribuir",
-            "DELETE /api/v1/grupos/{id}/agronomos/{agronomoId}");
+            "DELETE /api/v1/grupos/{id}/agronomos/{agronomoId}",
+            "POST /api/v1/grupos/{id}/novo-link");
 
     /** Rotas que, por desenho, nao tem escopo de grupo: publicas, da propria conta ou sem dado de ninguem. */
     public static final Set<String> ROTAS_SEM_ESCOPO_DE_GRUPO = Set.of(
