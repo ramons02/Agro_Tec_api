@@ -76,9 +76,7 @@ public class ClimaTempoRealService {
             return Optional.empty();
         }
 
-        FonteDados fonteFinal = contribuicoes.stream().allMatch(c -> c.fonte() == FonteDados.AO_VIVO)
-                ? FonteDados.AO_VIVO
-                : FonteDados.CACHE_EXPIRADO;
+        FonteDados fonteFinal = combinarFontes(contribuicoes);
         Instant medidoEm = contribuicoes.stream()
                 .map(c -> c.medicao().getDataHoraUtc())
                 .min(Instant::compareTo)
@@ -102,6 +100,22 @@ public class ClimaTempoRealService {
                 medidoEm));
     }
 
+    /** AO_VIVO so se todas as estacoes forem medicao real; leitura desatualizada pesa mais que previsao. */
+    private FonteDados combinarFontes(List<Contribuicao> contribuicoes) {
+        if (contribuicoes.stream().anyMatch(c -> c.fonte() == FonteDados.CACHE_EXPIRADO)) {
+            return FonteDados.CACHE_EXPIRADO;
+        }
+        if (contribuicoes.stream().anyMatch(c -> c.fonte() == FonteDados.PREVISAO)) {
+            return FonteDados.PREVISAO;
+        }
+        return FonteDados.AO_VIVO;
+    }
+
+    /** Leitura dentro do prazo mantem a procedencia gravada: fallback do Open-Meteo segue como PREVISAO. */
+    private FonteDados fonteDaLeituraFresca(MedicaoClima medicao) {
+        return medicao.getFonteDados() == FonteDados.PREVISAO ? FonteDados.PREVISAO : FonteDados.AO_VIVO;
+    }
+
     private double interpolar(List<Contribuicao> contribuicoes, Function<Contribuicao, Double> extrator) {
         Double resultado = interpolarOuNull(contribuicoes, extrator);
         return resultado != null ? resultado : 0.0;
@@ -123,7 +137,7 @@ public class ClimaTempoRealService {
         Instant agora = Instant.now();
         Optional<MedicaoClima> medicaoAtual = medicaoClimaRepository.findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(codigoEstacao);
         if (medicaoAtual.isPresent() && !estaExpirada(medicaoAtual.get(), agora)) {
-            return Optional.of(new Contribuicao(medicaoAtual.get(), FonteDados.AO_VIVO, 0));
+            return Optional.of(new Contribuicao(medicaoAtual.get(), fonteDaLeituraFresca(medicaoAtual.get()), 0));
         }
 
         ReentrantLock lock = locksPorEstacao.computeIfAbsent(codigoEstacao, k -> new ReentrantLock());
@@ -132,7 +146,7 @@ public class ClimaTempoRealService {
             Optional<MedicaoClima> reChecagem =
                     medicaoClimaRepository.findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(codigoEstacao);
             if (reChecagem.isPresent() && !estaExpirada(reChecagem.get(), Instant.now())) {
-                return Optional.of(new Contribuicao(reChecagem.get(), FonteDados.AO_VIVO, 0));
+                return Optional.of(new Contribuicao(reChecagem.get(), fonteDaLeituraFresca(reChecagem.get()), 0));
             }
             EstacaoInmet estacao = estacaoInmetRepository.findById(codigoEstacao).orElse(null);
             if (estacao == null) {
@@ -147,7 +161,8 @@ public class ClimaTempoRealService {
             boolean fresco = resultadoIngestao != ResultadoIngestao.FALHA_TOTAL
                     && !estaExpirada(aposIngestao.get(), Instant.now());
             return Optional.of(new Contribuicao(
-                    aposIngestao.get(), fresco ? FonteDados.AO_VIVO : FonteDados.CACHE_EXPIRADO, 0));
+                    aposIngestao.get(),
+                    fresco ? fonteDaLeituraFresca(aposIngestao.get()) : FonteDados.CACHE_EXPIRADO, 0));
         } finally {
             lock.unlock();
         }

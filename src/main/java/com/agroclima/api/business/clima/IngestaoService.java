@@ -66,7 +66,7 @@ public class IngestaoService {
             medicaoClimaRepository.inserirSeNaoExistir(
                     estacao.getCodigo(), previsao.obtidoEmUtc(), null, previsao.temperatura2mC(),
                     previsao.umidadeAr2mPct(), previsao.vento10mKmh() / 3.6, previsao.rajada10mKmh() / 3.6,
-                    FonteDados.AO_VIVO.name());
+                    FonteDados.PREVISAO.name());
             return ResultadoIngestao.FALLBACK;
         } catch (FontePrevisaoIndisponivelException ex) {
             log.error("Fallback Open-Meteo também falhou para {}: {}", estacao.getCodigo(), ex.getMessage());
