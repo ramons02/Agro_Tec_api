@@ -22,8 +22,8 @@ class TelegramControllerWebhookTest {
 
     private TelegramController controllerComSegredo(String segredo) {
         AppProperties props = new AppProperties(
-                null, null, null, null, null, null,
-                new AppProperties.Telegram("bot", "bot_user", "http://x", segredo), null);
+                null, null, null, null, null,
+                new AppProperties.Telegram("bot", "bot_user", "http://x", segredo));
         return new TelegramController(service, props);
     }
 

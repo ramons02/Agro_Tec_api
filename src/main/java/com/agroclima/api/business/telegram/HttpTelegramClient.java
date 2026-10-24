@@ -11,7 +11,7 @@ import java.util.Map;
 
 /** Chamada HTTP direta a `sendMessage` da Telegram Bot API (research.md: JSON simples o
  * suficiente pra nao justificar dependencia dedicada). FR-004 -- falha de envio nunca
- * propaga excecao, so loga e segue (mesmo padrao de degradacao graciosa do INMET/SoilGrids). */
+ * propaga excecao, so loga e segue (mesmo padrao de degradacao graciosa do Open-Meteo/SoilGrids). */
 public class HttpTelegramClient implements TelegramClient {
 
     private static final Logger log = LoggerFactory.getLogger(HttpTelegramClient.class);

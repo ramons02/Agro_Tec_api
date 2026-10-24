@@ -3,9 +3,7 @@ package com.agroclima.api.business.clima;
 import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
-import com.agroclima.api.business.estacao.EstacaoInmet;
-import com.agroclima.api.business.estacao.EstacaoInmetRepository;
-import com.agroclima.api.business.estacao.MedicaoClimaRepository;
+import com.agroclima.api.business.clima.clients.OpenMeteoClient;
 import com.agroclima.api.business.propriedade.Propriedade;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.business.talhao.Talhao;
@@ -16,7 +14,6 @@ import com.agroclima.api.support.ClimaIntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.Polygon;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -31,10 +28,12 @@ import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Espelha tests/integration/test_clima_atual_integration.py e test_estacao_mais_proxima_integration.py. */
+/** Clima atual por talhao (RF033, RN008, RN017): sem estacoes, direto do Open-Meteo no centroide. */
 class ClimaControllerIT extends ClimaIntegrationTestBase {
 
     private static final double LON = -48.50;
@@ -53,10 +52,7 @@ class ClimaControllerIT extends ClimaIntegrationTestBase {
     private TalhaoRepository talhaoRepository;
 
     @Autowired
-    private EstacaoInmetRepository estacaoInmetRepository;
-
-    @Autowired
-    private MedicaoClimaRepository medicaoClimaRepository;
+    private OpenMeteoClient openMeteoClient;
 
     @Autowired
     private JwtService jwtService;
@@ -75,9 +71,6 @@ class ClimaControllerIT extends ClimaIntegrationTestBase {
         Talhao talhao = talhaoRepository.save(new Talhao(
                 propriedade.getId(), "Talhão Clima", GeometriaUtil.normalizarParaMultiPolygon(quadrado(LON, LAT, 0.01)), 100.0));
         talhaoId = talhao.getId();
-
-        Point posicao = GeometriaUtil.FACTORY_4326.createPoint(new Coordinate(LON + 0.02, LAT + 0.02));
-        estacaoInmetRepository.save(new EstacaoInmet("A001", "Estação Teste A", "PA", posicao));
     }
 
     private Polygon quadrado(double lon0, double lat0, double lado) {
@@ -96,94 +89,50 @@ class ClimaControllerIT extends ClimaIntegrationTestBase {
         return headers;
     }
 
-    private void stubInmetComLeitura() {
-        // Precisa ser "agora" (UTC) -- RN008 considera expirado apos 30min, e um horario
-        // fixo no passado faria a leitura nascer stale dependendo de quando o teste roda.
-        java.time.ZonedDateTime agoraUtc = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC);
-        String data = agoraUtc.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        String hora = agoraUtc.format(java.time.format.DateTimeFormatter.ofPattern("HHmm"));
-        String corpo = "["
-                + "{\"DT_MEDICAO\":\"" + data + "\",\"HR_MEDICAO\":\"" + hora + "\",\"CHUVA\":\"2.5\","
-                + "\"TEM_INS\":\"29.4\",\"UMD_INS\":\"65\",\"VEN_VEL\":\"1.5\",\"VEN_RAJA\":\"3.0\"}"
-                + "]";
-        INMET_MOCK.stubFor(get(urlPathMatching("/estacao/dados/.*"))
-                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(corpo)));
+    @SuppressWarnings("unchecked")
+    private ResponseEntity<Map> consultar() {
+        return restTemplate.exchange(
+                "/api/v1/clima/atual?talhao_id=" + talhaoId, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
     }
 
-    private void stubInmetIndisponivel() {
-        INMET_MOCK.stubFor(get(urlPathMatching("/estacao/dados/.*")).willReturn(aResponse().withStatus(500)));
-    }
-
-    private void stubOpenMeteoComPrevisao() {
-        String corpo = "{"
-                + "\"hourly\":{\"wind_speed_10m\":[12.0],\"wind_speed_100m\":[20.0],"
-                + "\"soil_moisture_0_to_7cm\":[0.3],\"soil_moisture_7_to_28cm\":[0.35]},"
-                + "\"daily\":{\"et0_fao_evapotranspiration\":[4.2],\"precipitation_sum\":[0.0]}"
-                + "}";
-        OPENMETEO_MOCK.stubFor(get(urlPathMatching("/v1/forecast.*"))
-                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(corpo)));
-    }
-
-    private void stubOpenMeteoIndisponivel() {
-        OPENMETEO_MOCK.stubFor(get(urlPathMatching("/v1/forecast.*")).willReturn(aResponse().withStatus(500)));
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> dados(ResponseEntity<Map> resposta) {
+        return (Map<String, Object>) resposta.getBody().get("dados");
     }
 
     @Test
-    void climaAtualIngereDoInmetQuandoNaoHaMedicaoERetornaAoVivo() {
-        stubInmetComLeitura();
+    void climaAtualVemDoOpenMeteoNoCentroideDoTalhaoEMarcaPrevisao() {
+        stubOpenMeteoCondicaoAtual(29.9, 70.0, 13.7, 35.3, 0.4);
 
-        ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/clima/atual?talhao_id=" + talhaoId, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
+        ResponseEntity<Map> resposta = consultar();
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
-        assertThat(dados.get("fonte_dados")).isEqualTo("AO_VIVO");
-        assertThat(((Number) dados.get("chuva_mm")).doubleValue()).isEqualTo(2.5);
+        Map<String, Object> dados = dados(resposta);
+        assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
+        assertThat(((Number) dados.get("temperatura_c")).doubleValue()).isEqualTo(29.9);
+        assertThat(((Number) dados.get("umidade_pct")).doubleValue()).isEqualTo(70.0);
+        assertThat(((Number) dados.get("vento_kmh")).doubleValue()).isEqualTo(13.7);
+        assertThat(((Number) dados.get("rajada_kmh")).doubleValue()).isEqualTo(35.3);
+        assertThat(((Number) dados.get("chuva_mm")).doubleValue()).isEqualTo(0.4);
+        assertThat(dados.get("medido_em_utc")).isEqualTo("2026-10-24T19:00:00Z");
+        assertThat(dados).doesNotContainKey("estacao");
         assertThat(resposta.getHeaders().getCacheControl()).contains("no-cache");
+        // O ponto consultado e o centroide do talhao (lado de 0,01 grau), nao uma estacao.
+        OPENMETEO_MOCK.verify(getRequestedFor(urlPathEqualTo("/v1/forecast"))
+                .withQueryParam("current", matching(".*wind_gusts_10m.*"))
+                .withQueryParam("latitude", matching("-1\\.44(5|49).*"))
+                .withQueryParam("longitude", matching("-48\\.49(5|49).*")));
     }
 
     @Test
-    void climaAtualUsaFallbackOpenMeteoQuandoInmetFalha() {
-        stubInmetIndisponivel();
-        stubOpenMeteoComPrevisao();
-
-        ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/clima/atual?talhao_id=" + talhaoId, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
-
-        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
-        // fallback bem-sucedido e leitura fresca, mas e valor de modelo, nunca medicao de estacao.
-        assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
-    }
-
-    @Test
-    void leituraDoFallbackLidaDepoisDoBancoContinuaPrevisaoENuncaViraAoVivo() {
-        stubInmetIndisponivel();
-        stubOpenMeteoComPrevisao();
-        String url = "/api/v1/clima/atual?talhao_id=" + talhaoId;
-
-        restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
-        ResponseEntity<Map> segunda = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
-
-        Map<String, Object> dados = (Map<String, Object>) segunda.getBody().get("dados");
-        assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
-    }
-
-    @Test
-    void climaAtualUsaMetNorwayQuandoInmetEOpenMeteoFalham() {
-        stubInmetIndisponivel();
+    void usaMetNorwayQuandoOOpenMeteoFalha() {
         stubOpenMeteoIndisponivel();
-        OPENMETEO_MOCK.stubFor(get(urlPathMatching("/weatherapi/locationforecast/2.0/complete.*")).willReturn(
-                aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(
-                        "{\"properties\":{\"timeseries\":[{\"time\":\"2026-10-24T19:00:00Z\",\"data\":{"
-                                + "\"instant\":{\"details\":{\"air_temperature\":29.7,\"relative_humidity\":70.8,"
-                                + "\"wind_speed\":5.0}},\"next_1_hours\":{\"details\":{\"precipitation_amount\":0.0}}}}]}}")));
+        stubMetNorwayCondicao(29.7, 70.8, 5.0, 0.0);
 
-        ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/clima/atual?talhao_id=" + talhaoId, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
+        ResponseEntity<Map> resposta = consultar();
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
+        Map<String, Object> dados = dados(resposta);
         assertThat(dados.get("fonte_dados")).isEqualTo("PREVISAO");
         assertThat(((Number) dados.get("temperatura_c")).doubleValue()).isEqualTo(29.7);
         assertThat(((Number) dados.get("vento_kmh")).doubleValue()).isEqualTo(18.0);
@@ -191,48 +140,58 @@ class ClimaControllerIT extends ClimaIntegrationTestBase {
     }
 
     @Test
-    void climaAtualRetorna404QuandoInmetEOpenMeteoFalhamSemMedicaoPrevia() {
-        stubInmetIndisponivel();
+    void usaMetNorwayQuandoOOpenMeteoResponde200SemACondicaoAtual() {
+        OPENMETEO_MOCK.stubFor(get(urlPathEqualTo("/v1/forecast")).willReturn(
+                aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody("{}")));
+        stubMetNorwayCondicao(25.0, 80.0, 2.0, 0.0);
+
+        ResponseEntity<Map> resposta = consultar();
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(((Number) dados(resposta).get("temperatura_c")).doubleValue()).isEqualTo(25.0);
+    }
+
+    @Test
+    void retorna404QuandoOsDoisProvedoresFalhamSemLeituraAnterior() {
         stubOpenMeteoIndisponivel();
 
-        ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/clima/atual?talhao_id=" + talhaoId, HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
+        ResponseEntity<Map> resposta = consultar();
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
-    void climaAtualComTalhaoInexistenteRetorna404() {
-        stubInmetComLeitura();
-        ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/clima/atual?talhao_id=" + UUID.randomUUID(), HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
-        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    void comOsDoisProvedoresForaDoArDevolveALeituraAnteriorComoCacheExpirado() {
+        stubOpenMeteoCondicaoAtual(31.0, 55.0, 9.0, 20.0, 0.0);
+        assertThat(dados(consultar()).get("fonte_dados")).isEqualTo("PREVISAO");
+
+        // O cache de 10 min do cliente expira e os dois provedores caem.
+        openMeteoClient.limparCaches();
+        OPENMETEO_MOCK.resetAll();
+        stubOpenMeteoIndisponivel();
+
+        ResponseEntity<Map> resposta = consultar();
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> dados = dados(resposta);
+        assertThat(dados.get("fonte_dados")).isEqualTo("CACHE_EXPIRADO");
+        assertThat(((Number) dados.get("temperatura_c")).doubleValue()).isEqualTo(31.0);
     }
 
     @Test
-    void estacaoMaisProximaRetornaEstacaoCadastrada() {
+    void talhaoInexistenteRetorna404() {
         ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/talhoes/" + talhaoId + "/estacao-mais-proxima", HttpMethod.GET,
+                "/api/v1/clima/atual?talhao_id=" + UUID.randomUUID(), HttpMethod.GET,
                 new HttpEntity<>(headers()), Map.class);
 
-        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
-        var estacoes = (java.util.List<Map<String, Object>>) dados.get("estacoes");
-        assertThat(estacoes).hasSize(1);
-        assertThat(estacoes.get(0).get("estacao_codigo")).isEqualTo("A001");
-        assertThat(estacoes.get(0).get("nome")).isEqualTo("Estação Teste A");
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
-    void pulverizacaoClassificaFavoravelComVentoDentroDaFaixa() {
-        stubInmetComLeitura(); // VEN_VEL=1.5 m/s -> 5.4 km/h, dentro de 3-10 -> favoravel
+    void semTokenRetorna401() {
+        ResponseEntity<Map> resposta = restTemplate.getForEntity(
+                "/api/v1/clima/atual?talhao_id=" + talhaoId, Map.class);
 
-        ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/talhoes/" + talhaoId + "/pulverizacao", HttpMethod.GET, new HttpEntity<>(headers()), Map.class);
-
-        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
-        assertThat(dados.get("classificacao")).isEqualTo("FAVORAVEL");
-        assertThat((java.util.List<?>) dados.get("motivos_bloqueio")).isEmpty();
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 }

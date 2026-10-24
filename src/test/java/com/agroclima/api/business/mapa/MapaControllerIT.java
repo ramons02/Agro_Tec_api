@@ -3,11 +3,6 @@ package com.agroclima.api.business.mapa;
 import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
-import com.agroclima.api.business.estacao.EstacaoInmet;
-import com.agroclima.api.business.estacao.EstacaoInmetRepository;
-import com.agroclima.api.business.estacao.FonteDados;
-import com.agroclima.api.business.estacao.MedicaoClima;
-import com.agroclima.api.business.estacao.MedicaoClimaRepository;
 import com.agroclima.api.business.propriedade.Propriedade;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.business.talhao.Talhao;
@@ -26,7 +21,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,12 +41,6 @@ class MapaControllerIT extends IntegrationTestBase {
     private TalhaoRepository talhaoRepository;
 
     @Autowired
-    private EstacaoInmetRepository estacaoInmetRepository;
-
-    @Autowired
-    private MedicaoClimaRepository medicaoClimaRepository;
-
-    @Autowired
     private JwtService jwtService;
 
     private Polygon quadrado(double lon0, double lat0) {
@@ -65,8 +53,15 @@ class MapaControllerIT extends IntegrationTestBase {
         });
     }
 
+    private HttpHeaders headers(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        return headers;
+    }
+
     @Test
-    void dadosDoMapaTraProriedadesComTalhoesEEstacoesComMedicao() {
+    @SuppressWarnings("unchecked")
+    void dadosDoMapaTrazPropriedadesComTalhoesSemEstacoes() {
         Usuario dono = usuarioRepository.save(new Usuario("Dono Mapa", "dono-mapa@teste.com", "hash-irrelevante", Papel.PRODUTOR_RURAL));
         String token = jwtService.criarToken(dono.getId(), dono.getPapel()).token();
 
@@ -74,14 +69,8 @@ class MapaControllerIT extends IntegrationTestBase {
         talhaoRepository.save(new Talhao(propriedade.getId(), "Talhão Mapa",
                 GeometriaUtil.normalizarParaMultiPolygon(quadrado(-48.5, -1.45)), 50.0));
 
-        var posicao = GeometriaUtil.FACTORY_4326.createPoint(new Coordinate(-48.52, -1.47));
-        EstacaoInmet estacao = estacaoInmetRepository.save(new EstacaoInmet("M001", "Estação Mapa", "PA", posicao));
-        medicaoClimaRepository.save(new MedicaoClima(estacao.getCodigo(), Instant.now(), 4.0, 27.0, 70.0, 2.0, 3.0, FonteDados.AO_VIVO));
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
         ResponseEntity<Map> resposta = restTemplate.exchange(
-                "/api/v1/mapa/dados", HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+                "/api/v1/mapa/dados", HttpMethod.GET, new HttpEntity<>(headers(token)), Map.class);
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> dados = (Map<String, Object>) resposta.getBody().get("dados");
@@ -91,11 +80,23 @@ class MapaControllerIT extends IntegrationTestBase {
         var talhoes = (java.util.List<Map<String, Object>>) propriedades.get(0).get("talhoes");
         assertThat(talhoes).hasSize(1);
         assertThat(talhoes.get(0).get("geometria_geojson")).isNotNull();
+        // Sem INMET nao ha estacoes: o campo saiu do contrato.
+        assertThat(dados).doesNotContainKey("estacoes");
+    }
 
-        var estacoes = (java.util.List<Map<String, Object>>) dados.get("estacoes");
-        assertThat(estacoes).hasSize(1);
-        assertThat(estacoes.get(0).get("nome")).isEqualTo("Estação Mapa");
-        var ultimaMedicao = (Map<String, Object>) estacoes.get(0).get("ultima_medicao");
-        assertThat(ultimaMedicao.get("fonte_dados")).isEqualTo("AO_VIVO");
+    @Test
+    @SuppressWarnings("unchecked")
+    void produtorSoVeAsPropriasPropriedadesNoMapa() {
+        Usuario dono = usuarioRepository.save(new Usuario("Dono A", "dono-a-mapa@teste.com", "hash-irrelevante", Papel.PRODUTOR_RURAL));
+        Usuario outro = usuarioRepository.save(new Usuario("Dono B", "dono-b-mapa@teste.com", "hash-irrelevante", Papel.PRODUTOR_RURAL));
+        propriedadeRepository.save(new Propriedade("Fazenda de A", "Belém", dono.getId(), null));
+        propriedadeRepository.save(new Propriedade("Fazenda de B", "Belém", outro.getId(), null));
+        String tokenA = jwtService.criarToken(dono.getId(), dono.getPapel()).token();
+
+        ResponseEntity<Map> resposta = restTemplate.exchange(
+                "/api/v1/mapa/dados", HttpMethod.GET, new HttpEntity<>(headers(tokenA)), Map.class);
+
+        var propriedades = (java.util.List<Map<String, Object>>) ((Map<String, Object>) resposta.getBody().get("dados")).get("propriedades");
+        assertThat(propriedades).extracting(p -> p.get("nome")).containsExactly("Fazenda de A");
     }
 }

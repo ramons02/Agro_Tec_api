@@ -11,7 +11,7 @@ import java.util.Optional;
 
 /**
  * Espelha app/services/soilgrids_service.py (feature 004). Timeout 5s (mais frouxo que
- * INMET/Open-Meteo -- e uma consulta pontual na criacao do talhao, nao hot-path).
+ * Open-Meteo -- e uma consulta pontual na criacao do talhao, nao hot-path).
  * "Sem cobertura" (layers vazio ou clay/sand/silt ausentes) e Optional.empty() -- resposta
  * legitima, diferente de FonteSoloIndisponivelException (erro de rede/HTTP).
  */

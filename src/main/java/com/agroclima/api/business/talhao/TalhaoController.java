@@ -2,8 +2,6 @@ package com.agroclima.api.business.talhao;
 
 import com.agroclima.api.business.balancohidrico.BalancoHidricoDiario;
 import com.agroclima.api.business.balancohidrico.BalancoHidricoDiarioRepository;
-import com.agroclima.api.business.estacao.EstacaoInmetRepository;
-import com.agroclima.api.business.estacao.EstacaoProximaProjecao;
 import com.agroclima.api.core.calculos.ClassificacaoPulverizacao;
 import com.agroclima.api.core.calculos.RecomendacaoCalculos;
 import com.agroclima.api.core.calculos.StatusPlantio;
@@ -43,7 +41,7 @@ import java.util.UUID;
 
 /**
  * Espelha app/api/v1/endpoints/talhoes.py -- criacao/import/listagem/busca/exclusao
- * (Fase 5), estacao-mais-proxima/pulverizacao (Fase 6) e recomendacao/balanco-hidrico
+ * (Fase 5), pulverizacao (Fase 6) e recomendacao/balanco-hidrico
  * (Fase 7, dependiam de business.balancohidrico).
  */
 @RestController
@@ -53,17 +51,14 @@ public class TalhaoController {
     private static final int TAMANHO_PAGINA_PADRAO = 20;
 
     private final TalhaoService talhaoService;
-    private final EstacaoInmetRepository estacaoInmetRepository;
     private final PulverizacaoService pulverizacaoService;
     private final BalancoHidricoDiarioRepository balancoHidricoDiarioRepository;
 
     public TalhaoController(
             TalhaoService talhaoService,
-            EstacaoInmetRepository estacaoInmetRepository,
             PulverizacaoService pulverizacaoService,
             BalancoHidricoDiarioRepository balancoHidricoDiarioRepository) {
         this.talhaoService = talhaoService;
-        this.estacaoInmetRepository = estacaoInmetRepository;
         this.pulverizacaoService = pulverizacaoService;
         this.balancoHidricoDiarioRepository = balancoHidricoDiarioRepository;
     }
@@ -120,26 +115,6 @@ public class TalhaoController {
     public ApiEnvelope<Map<String, Object>> buscar(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
         return ApiEnvelope.sucesso(paraDados(talhaoService.buscarVisivelOu404(usuario, id)));
-    }
-
-    @GetMapping("/{id}/estacao-mais-proxima")
-    public ApiEnvelope<Map<String, Object>> estacaoMaisProxima(
-            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
-        Talhao talhao = talhaoService.buscarVisivelOu404(usuario, id);
-        List<EstacaoProximaProjecao> estacoes =
-                estacaoInmetRepository.buscarMaisProximas(talhao.getGeometria().getCentroid(), 3);
-        if (estacoes.isEmpty()) {
-            throw new AppException(404, "Nenhuma estação disponível.");
-        }
-        List<Map<String, Object>> itens = estacoes.stream()
-                .map(e -> (Map<String, Object>) Map.<String, Object>of(
-                        "estacao_codigo", e.getCodigo(),
-                        "nome", e.getNome(),
-                        "distancia_km", e.getDistanciaKm(),
-                        "latitude", e.getLatitude(),
-                        "longitude", e.getLongitude()))
-                .toList();
-        return ApiEnvelope.sucesso(Map.of("estacoes", itens));
     }
 
     @GetMapping("/{id}/pulverizacao")

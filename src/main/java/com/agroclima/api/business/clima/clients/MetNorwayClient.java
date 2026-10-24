@@ -26,9 +26,6 @@ public class MetNorwayClient {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final Duration TTL_CACHE = Duration.ofMinutes(30);
 
-    public record CondicaoAtual(
-            double temperaturaC, double umidadePct, double ventoMs, Double precipitacaoMm, Instant obtidoEmUtc) {}
-
     private final RestClient restClient;
     private final Cache<String, CondicaoAtual> cache =
             Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
@@ -88,7 +85,8 @@ public class MetNorwayClient {
         return new CondicaoAtual(
                 detalhes.get("air_temperature").asDouble(),
                 detalhes.get("relative_humidity").asDouble(),
-                detalhes.get("wind_speed").asDouble(),
+                detalhes.get("wind_speed").asDouble() * 3.6,
+                null,
                 chuva.isNumber() ? chuva.asDouble() : null,
                 Instant.now());
     }
