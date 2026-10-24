@@ -233,15 +233,29 @@ public class ImportacaoGeoService {
             return geometria;
         }
         try {
-            CoordinateReferenceSystem crsDestino = CRS.decode("EPSG:4326");
-            if (CRS.equalsIgnoreMetadata(crsOrigem, crsDestino)) {
+            // Os dois lados em ordem x=longitude, y=latitude: e assim que o Shapefile guarda as coordenadas.
+            // Sem isso, CRS.decode("EPSG:4326") usa a ordem oficial (latitude, longitude) e a reprojecao
+            // devolve as duas coordenadas trocadas, mesmo para um .prj ja em WGS84.
+            CoordinateReferenceSystem crsDestino = CRS.decode("EPSG:4326", true);
+            CoordinateReferenceSystem crsOrigemXY = comOrdemLongitudeLatitude(crsOrigem);
+            if (CRS.equalsIgnoreMetadata(crsOrigemXY, crsDestino)) {
                 return geometria;
             }
-            MathTransform transformacao = CRS.findMathTransform(crsOrigem, crsDestino, true);
+            MathTransform transformacao = CRS.findMathTransform(crsOrigemXY, crsDestino, true);
             return JTS.transform(geometria, transformacao);
         } catch (FactoryException | TransformException ex) {
             throw new GeometriaInvalidaException("Não foi possível reprojetar o sistema de referência do Shapefile.");
         }
+    }
+
+    /**
+     * O GeoTools le o .prj com a ordem de eixos que o WKT declara (ou a oficial do codigo EPSG, latitude
+     * antes de longitude), mas as coordenadas do Shapefile sempre vem como x, y. Quando o CRS tem codigo
+     * EPSG conhecido, usa a mesma definicao com longitude primeiro; senao mantem o CRS lido do arquivo.
+     */
+    private CoordinateReferenceSystem comOrdemLongitudeLatitude(CoordinateReferenceSystem crs) throws FactoryException {
+        Integer codigo = CRS.lookupEpsgCode(crs, true);
+        return codigo == null ? crs : CRS.decode("EPSG:" + codigo, true);
     }
 
     private void limparDiretorio(Path diretorio) {
