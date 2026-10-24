@@ -18,7 +18,7 @@ public record AppProperties(
 
     /** botToken vazio = TelegramConfig cai no fallback de log (feature 017, mesmo padrao de SMTP).
      * baseUrl override-avel em teste (WireMock), mesmo padrao de Inmet/Openmeteo. */
-    public record Telegram(String botToken, String botUsername, String baseUrl) {}
+    public record Telegram(String botToken, String botUsername, String baseUrl, String webhookSecret) {}
 
     /** baseUrl override-avel em teste (WireMock) -- em producao aponta pra API real do INMET. */
     public record Inmet(String baseUrl) {}

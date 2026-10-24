@@ -34,6 +34,7 @@ public abstract class IntegrationTestBase {
         registry.add("spring.flyway.schemas", () -> "java_test");
         registry.add("spring.flyway.default-schema", () -> "java_test");
         registry.add("spring.flyway.clean-disabled", () -> "false");
+        registry.add("app.jwt.secret", () -> "segredo-somente-para-testes-de-integracao-0123456789");
     }
 
     /**
