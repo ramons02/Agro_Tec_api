@@ -290,13 +290,14 @@ public class OpenMeteoClient {
         return dias;
     }
 
-    private double valorNoIndice(JsonNode secao, String campo, int indice) {
+    /** Campo ausente, mais curto que o indice ou nao numerico (inclusive null do provedor) vira nulo, nunca 0. */
+    private Double valorNoIndice(JsonNode secao, String campo, int indice) {
         JsonNode array = secao.path(campo);
         if (!array.isArray() || indice >= array.size()) {
-            return 0.0;
+            return null;
         }
         JsonNode valor = array.get(indice);
-        return valor.isNumber() ? valor.asDouble() : 0.0;
+        return valor.isNumber() ? valor.asDouble() : null;
     }
 
     private PrevisaoClimatica parsear(JsonNode resposta, double lat, double lon) {

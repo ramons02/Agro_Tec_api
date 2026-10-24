@@ -11,6 +11,13 @@ import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Segundo provedor de condicao atual (reserva do Open-Meteo): API Locationforecast do MET Norway,
@@ -27,7 +34,14 @@ public class MetNorwayClient {
     private static final Duration TTL_CACHE = Duration.ofMinutes(30);
 
     private final RestClient restClient;
+    /** Menos pontos que isso (a serie vem de hora em hora no comeco e de 6 em 6 horas depois) nao
+     * representam o dia: o dia e descartado em vez de mostrar maxima e minima de um pedaco dele. */
+    static final int PONTOS_MINIMOS_POR_DIA = 3;
+    static final int DIAS_DA_PREVISAO = 10;
+
     private final Cache<String, CondicaoAtual> cache =
+            Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
+    private final Cache<String, List<PrevisaoDiaria>> cache10Dias =
             Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
 
     public MetNorwayClient(
@@ -47,6 +61,7 @@ public class MetNorwayClient {
     /** Para testes: o cache e de singleton e atravessa testes que compartilham o contexto Spring. */
     public void limparCache() {
         cache.invalidateAll();
+        cache10Dias.invalidateAll();
     }
 
     public CondicaoAtual obterCondicaoAtual(double lat, double lon) {
@@ -60,6 +75,99 @@ public class MetNorwayClient {
         CondicaoAtual condicao = buscar(latArredondada, lonArredondada);
         cache.put(chave, condicao);
         return condicao;
+    }
+
+    /**
+     * Reserva da previsao de 10 dias (FR-005): agrega a serie por dia UTC -- minima e maxima da
+     * temperatura, soma da chuva e vento maximo em km/h. Rajada e probabilidade de chuva nao
+     * existem aqui nos tropicos e ficam nulas. A serie pode cobrir menos de 10 dias.
+     */
+    public List<PrevisaoDiaria> obterPrevisao10Dias(double lat, double lon) {
+        double latArredondada = Math.round(lat * 100) / 100.0;
+        double lonArredondada = Math.round(lon * 100) / 100.0;
+        String chave = latArredondada + "," + lonArredondada;
+        List<PrevisaoDiaria> emCache = cache10Dias.getIfPresent(chave);
+        if (emCache != null) {
+            return emCache;
+        }
+        List<PrevisaoDiaria> dias = agregarPorDia(consultar(latArredondada, lonArredondada));
+        if (dias.isEmpty()) {
+            throw new FontePrevisaoIndisponivelException("MET Norway devolveu resposta sem pontos suficientes.", null);
+        }
+        cache10Dias.put(chave, dias);
+        return dias;
+    }
+
+    private static final class Acumulado {
+        int pontos;
+        Double minC;
+        Double maxC;
+        Double chuvaMm;
+        Double ventoMaxKmh;
+
+        void somar(JsonNode ponto) {
+            pontos++;
+            JsonNode detalhes = ponto.path("data").path("instant").path("details");
+            if (detalhes.path("air_temperature").isNumber()) {
+                double c = detalhes.get("air_temperature").asDouble();
+                minC = minC == null ? c : Math.min(minC, c);
+                maxC = maxC == null ? c : Math.max(maxC, c);
+            }
+            if (detalhes.path("wind_speed").isNumber()) {
+                double kmh = detalhes.get("wind_speed").asDouble() * 3.6;
+                ventoMaxKmh = ventoMaxKmh == null ? kmh : Math.max(ventoMaxKmh, kmh);
+            }
+            // Cada ponto cobre a hora seguinte (serie horaria) ou as 6 horas seguintes (serie
+            // espacada): usar so um dos dois evita contar a mesma chuva duas vezes.
+            JsonNode chuva = ponto.path("data").path("next_1_hours").path("details").path("precipitation_amount");
+            if (!chuva.isNumber()) {
+                chuva = ponto.path("data").path("next_6_hours").path("details").path("precipitation_amount");
+            }
+            if (chuva.isNumber()) {
+                chuvaMm = (chuvaMm == null ? 0.0 : chuvaMm) + chuva.asDouble();
+            }
+        }
+    }
+
+    private List<PrevisaoDiaria> agregarPorDia(JsonNode serie) {
+        Map<LocalDate, Acumulado> porDia = new TreeMap<>();
+        for (JsonNode ponto : serie) {
+            String horario = ponto.path("time").asText(null);
+            if (horario == null) {
+                continue;
+            }
+            LocalDate dia = ZonedDateTime.parse(horario).withZoneSameInstant(ZoneOffset.UTC).toLocalDate();
+            porDia.computeIfAbsent(dia, d -> new Acumulado()).somar(ponto);
+        }
+        List<PrevisaoDiaria> dias = new ArrayList<>();
+        for (Map.Entry<LocalDate, Acumulado> entrada : porDia.entrySet()) {
+            Acumulado a = entrada.getValue();
+            if (a.pontos < PONTOS_MINIMOS_POR_DIA || dias.size() == DIAS_DA_PREVISAO) {
+                continue;
+            }
+            dias.add(new PrevisaoDiaria(entrada.getKey(), a.minC, a.maxC, a.chuvaMm, null, a.ventoMaxKmh, null));
+        }
+        return dias;
+    }
+
+    private JsonNode consultar(double lat, double lon) {
+        JsonNode resposta;
+        try {
+            resposta = restClient.get()
+                    .uri(uri -> uri.path("/weatherapi/locationforecast/2.0/complete")
+                            .queryParam("lat", lat)
+                            .queryParam("lon", lon)
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (RestClientException ex) {
+            throw new FontePrevisaoIndisponivelException("MET Norway indisponível.", ex);
+        }
+        JsonNode serie = resposta == null ? null : resposta.path("properties").path("timeseries");
+        if (serie == null || !serie.isArray()) {
+            throw new FontePrevisaoIndisponivelException("MET Norway devolveu resposta sem série temporal.", null);
+        }
+        return serie;
     }
 
     private CondicaoAtual buscar(double lat, double lon) {
