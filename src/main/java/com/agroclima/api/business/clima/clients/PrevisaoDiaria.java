@@ -2,12 +2,15 @@ package com.agroclima.api.business.clima.clients;
 
 import java.time.LocalDate;
 
-/** Um dia da previsao de 10 dias da Open-Meteo (feature nova: busca por cidade). */
+/**
+ * Um dia da previsao de 10 dias (busca por cidade). Campo que a fonte nao entregou vem nulo,
+ * nunca zero: zero de chuva ou de vento seria dado inventado (FR-009, RN008).
+ */
 public record PrevisaoDiaria(
         LocalDate data,
-        double temperaturaMinC,
-        double temperaturaMaxC,
-        double precipitacaoPrevistaMm,
-        double probabilidadeChuvaPct,
-        double ventoMaxKmh,
-        double rajadaMaxKmh) {}
+        Double temperaturaMinC,
+        Double temperaturaMaxC,
+        Double precipitacaoPrevistaMm,
+        Double probabilidadeChuvaPct,
+        Double ventoMaxKmh,
+        Double rajadaMaxKmh) {}
