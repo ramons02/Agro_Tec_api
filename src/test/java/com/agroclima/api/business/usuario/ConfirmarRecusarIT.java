@@ -4,6 +4,8 @@ import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.StatusConta;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
+import com.agroclima.api.business.grupo.GrupoRepository;
+import com.agroclima.api.support.GruposDeTeste;
 import com.agroclima.api.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,9 @@ class ConfirmarRecusarIT extends IntegrationTestBase {
     private UsuarioRepository usuarioRepository;
 
     @Autowired
+    private GrupoRepository grupoRepository;
+
+    @Autowired
     private AuditoriaContaRepository auditoriaRepository;
 
     @Autowired
@@ -44,7 +49,8 @@ class ConfirmarRecusarIT extends IntegrationTestBase {
     @BeforeEach
     void preparar() {
         gestor = usuarioRepository.save(
-                new Usuario("Gestor", "gestor@teste.com", passwordEncoder.encode("senha12345"), Papel.GESTOR_TECNOLOGIA));
+                new Usuario("Gestor", "gestor@teste.com", passwordEncoder.encode("senha12345"), Papel.ADMIN_MASTER));
+        GruposDeTeste.criarGrupo(grupoRepository, usuarioRepository, "Grupo inicial", gestor);
         tokenGestor = login("gestor@teste.com", "senha12345");
     }
 

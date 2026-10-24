@@ -4,6 +4,8 @@ import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.StatusConta;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
+import com.agroclima.api.business.grupo.GrupoRepository;
+import com.agroclima.api.support.GruposDeTeste;
 import com.agroclima.api.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,9 @@ class SuspenderReativarIT extends IntegrationTestBase {
     private UsuarioRepository usuarioRepository;
 
     @Autowired
+    private GrupoRepository grupoRepository;
+
+    @Autowired
     private AuditoriaContaRepository auditoriaRepository;
 
     @Autowired
@@ -42,7 +47,8 @@ class SuspenderReativarIT extends IntegrationTestBase {
 
     @BeforeEach
     void preparar() {
-        gestor = conta("gestor@teste.com", Papel.GESTOR_TECNOLOGIA);
+        gestor = conta("gestor@teste.com", Papel.ADMIN_MASTER);
+        GruposDeTeste.criarGrupo(grupoRepository, usuarioRepository, "Grupo inicial", gestor);
         tokenGestor = login("gestor@teste.com");
     }
 
@@ -162,7 +168,7 @@ class SuspenderReativarIT extends IntegrationTestBase {
 
     @Test
     void naoSuspendeOUltimoGestorAtivo() {
-        Usuario outroGestor = conta("gestor2@teste.com", Papel.GESTOR_TECNOLOGIA);
+        Usuario outroGestor = conta("gestor2@teste.com", Papel.ADMIN_MASTER);
         String tokenOutro = login("gestor2@teste.com");
         // Dois gestores ativos: o primeiro pode suspender o segundo.
         assertThat(suspender(outroGestor, null).getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -175,7 +181,7 @@ class SuspenderReativarIT extends IntegrationTestBase {
                 "/api/v1/usuarios/" + outroGestor.getId() + "/suspender", tokenOutro, null);
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(usuarioRepository.countByPapelAndStatus(Papel.GESTOR_TECNOLOGIA, StatusConta.ATIVA)).isEqualTo(1);
+        assertThat(usuarioRepository.countByPapelAndStatus(Papel.ADMIN_MASTER, StatusConta.ATIVA)).isEqualTo(1);
     }
 
     @Test

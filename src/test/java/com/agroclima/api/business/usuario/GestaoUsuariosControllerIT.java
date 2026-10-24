@@ -56,7 +56,7 @@ class GestaoUsuariosControllerIT extends IntegrationTestBase {
 
     @BeforeEach
     void preparar() {
-        gestor = usuarioRepository.save(new Usuario("Gestora Central", "gestora@teste.com", "hash-segredo-1", Papel.GESTOR_TECNOLOGIA));
+        gestor = usuarioRepository.save(new Usuario("Gestora Central", "gestora@teste.com", "hash-segredo-1", Papel.ADMIN_MASTER));
         produtorComDuas = usuarioRepository.save(new Usuario("Maria Produtora", "maria@fazenda.com", "hash-segredo-2", Papel.PRODUTOR_RURAL));
         produtorSemPropriedade = usuarioRepository.save(new Usuario("João Novato", "joao@fazenda.com", "hash-segredo-3", Papel.PRODUTOR_RURAL));
         agronomoVinculado = usuarioRepository.save(new Usuario("Ana Agrônoma", "ana@consultoria.com", "hash-segredo-4", Papel.AGRONOMO));
@@ -198,7 +198,7 @@ class GestaoUsuariosControllerIT extends IntegrationTestBase {
         Map<String, Object> porPapel = (Map<String, Object>) resumo.get("por_papel");
         assertThat(((Number) porPapel.get("PRODUTOR_RURAL")).intValue()).isEqualTo(2);
         assertThat(((Number) porPapel.get("AGRONOMO")).intValue()).isEqualTo(1);
-        assertThat(((Number) porPapel.get("GESTOR_TECNOLOGIA")).intValue()).isEqualTo(1);
+        assertThat(((Number) porPapel.get("ADMIN_MASTER")).intValue()).isEqualTo(1);
         // Ultimos 7 dias: Joao (agora) e Ana (3 dias); ultimos 30: Maria (20 dias) tambem. A gestora (60) fica fora.
         assertThat(((Number) resumo.get("cadastros_semana")).intValue()).isEqualTo(2);
         assertThat(((Number) resumo.get("cadastros_mes")).intValue()).isEqualTo(3);

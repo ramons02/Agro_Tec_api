@@ -123,7 +123,7 @@ public class AuthService {
                 .orElseThrow(() -> new AppException(401, "Token de autorização ausente ou expirado."));
         // So o gestor troca a propria senha quando quiser; produtor e agronomo so a definem no primeiro acesso
         // (senha temporaria) e, depois, quem redefine e o gestor.
-        if (!usuario.isPrecisaTrocarSenha() && usuario.getPapel() != Papel.GESTOR_TECNOLOGIA) {
+        if (!usuario.isPrecisaTrocarSenha() && !usuario.getPapel().ehGestor()) {
             throw new AppException(403, "Somente o administrador pode redefinir a sua senha.");
         }
         // 400 e nao 401: o app trata 401 como sessao expirada e deslogaria quem so errou a senha atual.
@@ -144,6 +144,10 @@ public class AuthService {
 
     @Transactional
     public Usuario registrar(String nome, String email, String senha, Papel papel, String convite) {
+        if (papel == Papel.ADMIN_MASTER) {
+            // Master nasce so por convite de outro Master (fase 3); nunca pelo cadastro.
+            throw new AppException(403, "Esse papel não pode ser escolhido no cadastro.");
+        }
         boolean gestor = papel == Papel.GESTOR_TECNOLOGIA;
         if (gestor) {
             // Registro publico nunca cria gestor sem convite valido (uso unico, amarrado ao e-mail).
@@ -169,8 +173,9 @@ public class AuthService {
 
     @Transactional
     public ConviteCriado criarConviteGestor(UsuarioAutenticado criador, String email) {
-        if (criador.papel() != Papel.GESTOR_TECNOLOGIA) {
-            throw new AppException(403, "Somente gestor de tecnologia pode convidar outro gestor.");
+        if (criador.papel() != Papel.ADMIN_MASTER) {
+            // Admin nao cria Admin nem Master (spec 024, FR-004): so o Master convida.
+            throw new AppException(403, "Somente o administrador da plataforma pode convidar outro gestor.");
         }
         String token = gerarTokenOpaco();
         ConviteGestor convite = new ConviteGestor(hashDoToken(token), email.trim(), criador.id());
@@ -212,11 +217,11 @@ public class AuthService {
             // Conta PENDENTE tambem nao recebe nada: ainda nao foi aprovada pelo administrador.
             return;
         }
-        if (usuario.getStatus() == StatusConta.SUSPENSA && usuario.getPapel() != Papel.GESTOR_TECNOLOGIA) {
+        if (usuario.getStatus() == StatusConta.SUSPENSA && !usuario.getPapel().ehGestor()) {
             // Conta suspensa nao entra: nao ha o que redefinir ate o gestor reativar.
             return;
         }
-        if (usuario.getPapel() != Papel.GESTOR_TECNOLOGIA) {
+        if (!usuario.getPapel().ehGestor()) {
             // Produtor e agronomo nao recebem link por e-mail: o pedido vira uma pendencia na tela do
             // gestor, que gera a senha temporaria e a repassa. A resposta ao endpoint continua a mesma.
             Instant agora = clock.instant();

@@ -3,6 +3,11 @@ package com.agroclima.api.business.vinculo;
 import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
+import com.agroclima.api.business.grupo.Grupo;
+import com.agroclima.api.business.grupo.GrupoRepository;
+import com.agroclima.api.business.grupo.ParticipacaoAgronomo;
+import com.agroclima.api.business.grupo.ParticipacaoAgronomoRepository;
+import com.agroclima.api.support.GruposDeTeste;
 import com.agroclima.api.business.propriedade.Propriedade;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.core.security.JwtService;
@@ -38,9 +43,36 @@ class VinculoControllerIT extends IntegrationTestBase {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private GrupoRepository grupoRepository;
+
+    @Autowired
+    private ParticipacaoAgronomoRepository participacaoRepository;
+
+    private Grupo grupo;
+
+    @org.junit.jupiter.api.BeforeEach
+    void criarGrupoDosTestes() {
+        Usuario admin = usuarioRepository.save(new Usuario("Admin", "admin-vinc@teste.com", "hash", Papel.GESTOR_TECNOLOGIA));
+        grupo = GruposDeTeste.criarGrupo(grupoRepository, usuarioRepository, "Grupo Vinculos", admin);
+    }
+
     private String criarUsuarioEToken(String email, Papel papel) {
-        Usuario usuario = usuarioRepository.save(new Usuario("Usuario Vinculo", email, "hash-irrelevante", papel));
+        Usuario novo = new Usuario("Usuario Vinculo", email, "hash-irrelevante", papel);
+        if (papel != Papel.AGRONOMO) {
+            novo.definirGrupo(grupo.getId());
+        }
+        Usuario usuario = usuarioRepository.save(novo);
+        if (papel == Papel.AGRONOMO) {
+            participacaoRepository.save(new ParticipacaoAgronomo(usuario.getId(), grupo.getId(), java.time.Instant.now()));
+        }
         return jwtService.criarToken(usuario.getId(), usuario.getPapel()).token();
+    }
+
+    private Propriedade propriedadeDoGrupo(String nome, Usuario dono) {
+        Propriedade propriedade = new Propriedade(nome, "Belém", dono.getId(), null);
+        propriedade.definirGrupo(dono.getGrupoId());
+        return propriedadeRepository.save(propriedade);
     }
 
     private HttpHeaders headersCom(String token) {
@@ -53,7 +85,7 @@ class VinculoControllerIT extends IntegrationTestBase {
     void donoConvidaAgronomoExistenteComSucesso() {
         String tokenDono = criarUsuarioEToken("dono-vinc1@teste.com", Papel.PRODUTOR_RURAL);
         Usuario dono = usuarioRepository.findByEmail("dono-vinc1@teste.com").orElseThrow();
-        Propriedade propriedade = propriedadeRepository.save(new Propriedade("Fazenda Vinc1", "Belém", dono.getId(), null));
+        Propriedade propriedade = propriedadeDoGrupo("Fazenda Vinc1", dono);
         criarUsuarioEToken("agronomo-vinc1@teste.com", Papel.AGRONOMO);
 
         ResponseEntity<Map> resposta = restTemplate.exchange(
@@ -69,7 +101,7 @@ class VinculoControllerIT extends IntegrationTestBase {
     void convidarEmailQueNaoEAgronomoRetorna422() {
         String tokenDono = criarUsuarioEToken("dono-vinc2@teste.com", Papel.PRODUTOR_RURAL);
         Usuario dono = usuarioRepository.findByEmail("dono-vinc2@teste.com").orElseThrow();
-        Propriedade propriedade = propriedadeRepository.save(new Propriedade("Fazenda Vinc2", "Belém", dono.getId(), null));
+        Propriedade propriedade = propriedadeDoGrupo("Fazenda Vinc2", dono);
         criarUsuarioEToken("produtor-vinc2@teste.com", Papel.PRODUTOR_RURAL);
 
         ResponseEntity<Map> resposta = restTemplate.exchange(
@@ -83,7 +115,7 @@ class VinculoControllerIT extends IntegrationTestBase {
     void naoDonoNaoConsegueConvidar() {
         String tokenDono = criarUsuarioEToken("dono-vinc3@teste.com", Papel.PRODUTOR_RURAL);
         Usuario dono = usuarioRepository.findByEmail("dono-vinc3@teste.com").orElseThrow();
-        Propriedade propriedade = propriedadeRepository.save(new Propriedade("Fazenda Vinc3", "Belém", dono.getId(), null));
+        Propriedade propriedade = propriedadeDoGrupo("Fazenda Vinc3", dono);
         String tokenOutro = criarUsuarioEToken("outro-vinc3@teste.com", Papel.PRODUTOR_RURAL);
         criarUsuarioEToken("agronomo-vinc3@teste.com", Papel.AGRONOMO);
 
@@ -98,7 +130,7 @@ class VinculoControllerIT extends IntegrationTestBase {
     void agronomoConvidadoAceitaOConvite() {
         String tokenDono = criarUsuarioEToken("dono-vinc4@teste.com", Papel.PRODUTOR_RURAL);
         Usuario dono = usuarioRepository.findByEmail("dono-vinc4@teste.com").orElseThrow();
-        Propriedade propriedade = propriedadeRepository.save(new Propriedade("Fazenda Vinc4", "Belém", dono.getId(), null));
+        Propriedade propriedade = propriedadeDoGrupo("Fazenda Vinc4", dono);
         String tokenAgronomo = criarUsuarioEToken("agronomo-vinc4@teste.com", Papel.AGRONOMO);
 
         ResponseEntity<Map> convite = restTemplate.exchange(
@@ -121,7 +153,7 @@ class VinculoControllerIT extends IntegrationTestBase {
     void outroAgronomoNaoConsegueAceitarConviteQueNaoESeu() {
         String tokenDono = criarUsuarioEToken("dono-vinc5@teste.com", Papel.PRODUTOR_RURAL);
         Usuario dono = usuarioRepository.findByEmail("dono-vinc5@teste.com").orElseThrow();
-        Propriedade propriedade = propriedadeRepository.save(new Propriedade("Fazenda Vinc5", "Belém", dono.getId(), null));
+        Propriedade propriedade = propriedadeDoGrupo("Fazenda Vinc5", dono);
         criarUsuarioEToken("agronomo-vinc5a@teste.com", Papel.AGRONOMO);
         String tokenOutroAgronomo = criarUsuarioEToken("agronomo-vinc5b@teste.com", Papel.AGRONOMO);
 

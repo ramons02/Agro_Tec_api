@@ -53,7 +53,7 @@ class TalhaoControllerIT extends IntegrationTestBase {
     /** Gestor so nasce por convite (registro publico recusa o papel), entao o teste o grava direto. */
     private String criarGestorELogar(String email) {
         usuarioRepository.save(new Usuario("Gestor Teste", email, passwordEncoder.encode("senha12345"),
-                Papel.GESTOR_TECNOLOGIA));
+                Papel.ADMIN_MASTER));
         ResponseEntity<Map> loginResposta = restTemplate.postForEntity("/api/v1/auth/login",
                 Map.of("email", email, "senha", "senha12345"), Map.class);
         return (String) dados(loginResposta).get("token");

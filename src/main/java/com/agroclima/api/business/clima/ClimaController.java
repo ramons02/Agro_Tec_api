@@ -1,11 +1,13 @@
 package com.agroclima.api.business.clima;
 
 import com.agroclima.api.business.talhao.Talhao;
-import com.agroclima.api.business.talhao.TalhaoRepository;
+import com.agroclima.api.business.talhao.TalhaoService;
 import com.agroclima.api.core.response.ApiEnvelope;
 import com.agroclima.api.core.response.AppException;
+import com.agroclima.api.core.security.UsuarioAutenticado;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,19 +25,21 @@ import java.util.UUID;
 @RequestMapping("/api/v1/clima")
 public class ClimaController {
 
-    private final TalhaoRepository talhaoRepository;
+    private final TalhaoService talhaoService;
     private final ClimaTempoRealService climaTempoRealService;
 
-    public ClimaController(TalhaoRepository talhaoRepository, ClimaTempoRealService climaTempoRealService) {
-        this.talhaoRepository = talhaoRepository;
+    public ClimaController(TalhaoService talhaoService, ClimaTempoRealService climaTempoRealService) {
+        this.talhaoService = talhaoService;
         this.climaTempoRealService = climaTempoRealService;
     }
 
     @GetMapping("/atual")
     public ResponseEntity<ApiEnvelope<Map<String, Object>>> climaAtual(
-            @RequestParam("talhao_id") UUID talhaoId, @RequestParam(name = "_t", required = false) Long cacheBuster) {
-        Talhao talhao = talhaoRepository.findById(talhaoId)
-                .orElseThrow(() -> new AppException(404, "Talhão não encontrado."));
+            @AuthenticationPrincipal UsuarioAutenticado usuario,
+            @RequestParam("talhao_id") UUID talhaoId,
+            @RequestParam(name = "_t", required = false) Long cacheBuster) {
+        // So talhoes do escopo do usuario (spec 024): fora dele, 404 como em todas as rotas de talhao.
+        Talhao talhao = talhaoService.buscarVisivelOu404(usuario, talhaoId);
 
         ClimaTempoRealService.ClimaAtualResultado resultado = climaTempoRealService.obterClimaAtual(talhao)
                 .orElseThrow(() -> new AppException(404, "Nenhuma medição disponível para este talhão ainda."));

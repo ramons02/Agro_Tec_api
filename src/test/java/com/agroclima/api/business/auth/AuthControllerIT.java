@@ -61,7 +61,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     private String tokenDeGestorExistente(String email) {
         usuarioRepository.save(new Usuario("Gestor Semente", email, passwordEncoder.encode("senha12345"),
-                Papel.GESTOR_TECNOLOGIA));
+                Papel.ADMIN_MASTER));
         return loginToken(email, "senha12345");
     }
 
