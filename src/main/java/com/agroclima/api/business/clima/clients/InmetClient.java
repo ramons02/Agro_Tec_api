@@ -46,6 +46,7 @@ public class InmetClient {
     private static final String PREFIXO_CACHE = "medicao-inmet:";
     private static final long TTL_CACHE_SEGUNDOS = 900;
 
+    private final boolean habilitado;
     private final RestClient restClient;
     private final CacheRedisService cacheRedisService;
     private final ObjectMapper objectMapper;
@@ -59,6 +60,7 @@ public class InmetClient {
                 .requestFactory(factory)
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
                 .build();
+        this.habilitado = appProperties.inmet().enabled();
         this.cacheRedisService = cacheRedisService;
         this.objectMapper = objectMapper;
     }
@@ -97,6 +99,11 @@ public class InmetClient {
         } catch (JsonProcessingException ex) {
             log.warn("Falha ao serializar medição pra cache Redis ({}): {}", chave, ex.getMessage());
         }
+    }
+
+    /** INMET_ENABLED=false: a ingestao nao tenta medicao do INMET (so o catalogo de estacoes e lido). */
+    public boolean habilitado() {
+        return habilitado;
     }
 
     private Optional<MedicaoInmetDto> buscarMedicaoRecenteReal(String codigoEstacao) {

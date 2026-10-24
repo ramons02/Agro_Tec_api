@@ -48,7 +48,7 @@ class InmetClientCacheTest {
     private InmetClient cliente(String redisUrl) {
         AppProperties propriedades = new AppProperties(
                 null, null, null, null,
-                new AppProperties.Inmet(inmetMock.baseUrl()), null, null,
+                new AppProperties.Inmet(inmetMock.baseUrl(), true), null, null,
                 new AppProperties.Redis(redisUrl));
         CacheRedisService cache = new CacheRedisService(propriedades);
         return new InmetClient(propriedades, cache, OBJECT_MAPPER);

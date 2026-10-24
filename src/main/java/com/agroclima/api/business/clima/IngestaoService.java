@@ -42,6 +42,9 @@ public class IngestaoService {
 
     @Transactional
     public ResultadoIngestao ingerirEstacao(EstacaoInmet estacao) {
+        if (!inmetClient.habilitado()) {
+            return tentarFallbackOpenMeteo(estacao);
+        }
         Optional<MedicaoInmetDto> medicaoOpt;
         try {
             medicaoOpt = inmetClient.buscarMedicaoRecente(estacao.getCodigo());

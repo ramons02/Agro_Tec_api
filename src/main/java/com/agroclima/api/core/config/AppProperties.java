@@ -20,8 +20,10 @@ public record AppProperties(
      * baseUrl override-avel em teste (WireMock), mesmo padrao de Inmet/Openmeteo. */
     public record Telegram(String botToken, String botUsername, String baseUrl, String webhookSecret) {}
 
-    /** baseUrl override-avel em teste (WireMock) -- em producao aponta pra API real do INMET. */
-    public record Inmet(String baseUrl) {}
+    /** baseUrl override-avel em teste (WireMock) -- em producao aponta pra API real do INMET.
+     * enabled=false faz a ingestao pular as medicoes do INMET e ir direto ao Open-Meteo; o catalogo
+     * de estacoes segue sendo lido. */
+    public record Inmet(String baseUrl, boolean enabled) {}
 
     /** baseUrl override-avel em teste (WireMock) -- em producao aponta pra API real do Open-Meteo. */
     /** proxyKey vazio = nao envia X-Proxy-Key; o Worker da Cloudflare so cobra a chave quando a tem configurada. */
