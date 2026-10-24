@@ -138,6 +138,54 @@ class ImportacaoGeoServiceTest {
     }
 
     @Test
+    void rejeitaZipBombQueExpandeAlemDoLimite() throws Exception {
+        ByteArrayOutputStream saida = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(saida)) {
+            zip.putNextEntry(new ZipEntry("talhao.dbf"));
+            byte[] bloco = new byte[1024 * 1024];
+            for (int i = 0; i < 101; i++) {
+                zip.write(bloco);
+            }
+            zip.closeEntry();
+        }
+        assertThat(saida.size()).isLessThan(1024 * 1024);
+
+        assertThatThrownBy(() -> service.extrairGeometria("talhao.zip", saida.toByteArray()))
+                .isInstanceOf(GeometriaInvalidaException.class)
+                .hasMessageContaining("excede o limite");
+    }
+
+    @Test
+    void rejeitaZipComArquivosDemais() throws Exception {
+        ByteArrayOutputStream saida = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(saida)) {
+            for (int i = 0; i < 51; i++) {
+                zip.putNextEntry(new ZipEntry("f" + i + ".txt"));
+                zip.closeEntry();
+            }
+        }
+
+        assertThatThrownBy(() -> service.extrairGeometria("talhao.zip", saida.toByteArray()))
+                .isInstanceOf(GeometriaInvalidaException.class)
+                .hasMessageContaining("arquivos demais");
+    }
+
+    @Test
+    void naoGravaEmDiscoEntradaForaDasExtensoesDeShapefile() throws Exception {
+        ByteArrayOutputStream saida = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(saida)) {
+            zip.putNextEntry(new ZipEntry("../../../tmp/malicioso.sh"));
+            zip.write("echo oi".getBytes());
+            zip.closeEntry();
+        }
+
+        assertThatThrownBy(() -> service.extrairGeometria("talhao.zip", saida.toByteArray()))
+                .isInstanceOf(GeometriaInvalidaException.class)
+                .hasMessageContaining("Nenhum arquivo .shp");
+        assertThat(Files.exists(Path.of("/tmp/malicioso.sh"))).isFalse();
+    }
+
+    @Test
     void rejeitaZipSemNenhumShpDentro() throws Exception {
         ByteArrayOutputStream saida = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(saida)) {

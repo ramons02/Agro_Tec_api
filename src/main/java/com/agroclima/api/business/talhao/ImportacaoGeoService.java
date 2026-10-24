@@ -27,14 +27,17 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -130,19 +133,47 @@ public class ImportacaoGeoService {
         }
     }
 
+    // Protecao contra zip bomb: um .zip pequeno pode expandir para gigabytes e esgotar disco/memoria.
+    private static final int MAX_ENTRADAS = 50;
+    private static final long MAX_BYTES_TOTAL = 100L * 1024 * 1024;
+    private static final Set<String> EXTENSOES_SHAPEFILE =
+            Set.of("shp", "shx", "dbf", "prj", "cpg", "qix", "fix", "sbn", "sbx");
+
     private File extrairZipEEncontrarShp(byte[] conteudoZip, Path diretorioDestino) {
         File shp = null;
+        long bytesTotal = 0;
+        int entradas = 0;
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(conteudoZip))) {
             ZipEntry entrada;
             boolean algumaEntrada = false;
+            byte[] buffer = new byte[8192];
             while ((entrada = zip.getNextEntry()) != null) {
                 algumaEntrada = true;
+                if (++entradas > MAX_ENTRADAS) {
+                    throw new GeometriaInvalidaException("Arquivo .zip com arquivos demais para um Shapefile.");
+                }
                 if (entrada.isDirectory()) {
                     continue;
                 }
                 String nomeEntrada = Path.of(entrada.getName()).getFileName().toString();
+                String nomeMinusculo = nomeEntrada.toLowerCase(Locale.ROOT);
+                String extensao = nomeMinusculo.substring(nomeMinusculo.lastIndexOf('.') + 1);
+                if (!nomeMinusculo.contains(".") || !EXTENSOES_SHAPEFILE.contains(extensao)) {
+                    continue;
+                }
                 Path destino = diretorioDestino.resolve(nomeEntrada);
-                Files.copy(zip, destino);
+                try (OutputStream saida = Files.newOutputStream(destino, StandardOpenOption.CREATE_NEW)) {
+                    int lidos;
+                    while ((lidos = zip.read(buffer)) != -1) {
+                        bytesTotal += lidos;
+                        if (bytesTotal > MAX_BYTES_TOTAL) {
+                            throw new GeometriaInvalidaException(
+                                    "Arquivo .zip descompactado excede o limite de "
+                                            + (MAX_BYTES_TOTAL / (1024 * 1024)) + " MB.");
+                        }
+                        saida.write(buffer, 0, lidos);
+                    }
+                }
                 if (nomeEntrada.toLowerCase(Locale.ROOT).endsWith(".shp")) {
                     shp = destino.toFile();
                 }
