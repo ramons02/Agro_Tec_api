@@ -36,16 +36,21 @@ public class OpenMeteoClient {
             Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
     private final Cache<String, List<PrevisaoDiaria>> cache10Dias =
             Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
+    private static final String HEADER_PROXY_KEY = "X-Proxy-Key";
     private final AtomicLong contadorChamadasReais = new AtomicLong();
 
     public OpenMeteoClient(AppProperties appProperties) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout((int) TIMEOUT.toMillis());
         factory.setReadTimeout((int) TIMEOUT.toMillis());
-        this.restClient = RestClient.builder()
+        RestClient.Builder builder = RestClient.builder()
                 .baseUrl(appProperties.openmeteo().baseUrl())
-                .requestFactory(factory)
-                .build();
+                .requestFactory(factory);
+        String proxyKey = appProperties.openmeteo().proxyKey();
+        if (proxyKey != null && !proxyKey.isBlank()) {
+            builder.defaultHeader(HEADER_PROXY_KEY, proxyKey);
+        }
+        this.restClient = builder.build();
     }
 
     public long contadorChamadasReais() {
