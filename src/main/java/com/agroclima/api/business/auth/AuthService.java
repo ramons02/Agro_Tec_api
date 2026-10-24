@@ -144,13 +144,13 @@ public class AuthService {
 
     @Transactional
     public Usuario registrar(String nome, String email, String senha, Papel papel, String convite) {
-        if (papel == Papel.ADMIN_MASTER) {
-            // Master nasce so por convite de outro Master (fase 3); nunca pelo cadastro.
-            throw new AppException(403, "Esse papel não pode ser escolhido no cadastro.");
+        if (papel == Papel.GESTOR_TECNOLOGIA) {
+            // Admin nasce por criacao direta do Master (spec 024); nem o cadastro nem convite criam Admin.
+            throw new AppException(403, "O Admin de um grupo é criado pelo administrador da plataforma.");
         }
-        boolean gestor = papel == Papel.GESTOR_TECNOLOGIA;
+        // Master nasce so por convite de outro Master (uso unico, amarrado ao e-mail).
+        boolean gestor = papel == Papel.ADMIN_MASTER;
         if (gestor) {
-            // Registro publico nunca cria gestor sem convite valido (uso unico, amarrado ao e-mail).
             consumirConviteGestor(convite, email);
             if (senha == null || senha.length() < SENHA_MINIMA) {
                 throw new AppException(400, "Informe uma senha com no mínimo " + SENHA_MINIMA + " caracteres.");
@@ -172,10 +172,10 @@ public class AuthService {
     public record ConviteCriado(String link, Instant expiraEm) {}
 
     @Transactional
-    public ConviteCriado criarConviteGestor(UsuarioAutenticado criador, String email) {
+    public ConviteCriado criarConviteMaster(UsuarioAutenticado criador, String email) {
         if (criador.papel() != Papel.ADMIN_MASTER) {
-            // Admin nao cria Admin nem Master (spec 024, FR-004): so o Master convida.
-            throw new AppException(403, "Somente o administrador da plataforma pode convidar outro gestor.");
+            // Admin nao cria Admin nem Master (spec 024, FR-004, FR-017): so o Master convida outro Master.
+            throw new AppException(403, "Somente o administrador da plataforma pode convidar outro administrador.");
         }
         String token = gerarTokenOpaco();
         ConviteGestor convite = new ConviteGestor(hashDoToken(token), email.trim(), criador.id());
@@ -189,7 +189,8 @@ public class AuthService {
         ConviteGestor convite = (token == null || token.isBlank())
                 ? null
                 : conviteRepository.findByTokenHash(hashDoToken(token.trim())).orElse(null);
-        if (convite == null || !convite.estaValidoPara(email, agora)) {
+        if (convite == null || !convite.estaValidoPara(email, agora)
+                || !Papel.ADMIN_MASTER.name().equals(convite.getPapelDestino())) {
             throw new AppException(403, "Convite inválido, expirado ou emitido para outro e-mail.");
         }
         convite.marcarUsado(agora);

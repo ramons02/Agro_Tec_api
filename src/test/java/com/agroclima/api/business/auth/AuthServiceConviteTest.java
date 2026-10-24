@@ -42,7 +42,7 @@ class AuthServiceConviteTest {
 
     private String criarConviteEDevolverToken(String email) {
         UsuarioAutenticado gestor = new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN_MASTER);
-        AuthService.ConviteCriado criado = service.criarConviteGestor(gestor, email);
+        AuthService.ConviteCriado criado = service.criarConviteMaster(gestor, email);
         return criado.link().substring(criado.link().indexOf("convite=") + 8);
     }
 
@@ -77,9 +77,9 @@ class AuthServiceConviteTest {
         ConviteGestor convite = conviteSalvo();
         when(convites.findByTokenHash(anyString())).thenReturn(Optional.of(convite));
 
-        Usuario criado = service.registrar("N", "G@X.com", "senha12345", Papel.GESTOR_TECNOLOGIA, token);
+        Usuario criado = service.registrar("N", "G@X.com", "senha12345", Papel.ADMIN_MASTER, token);
 
-        assertEquals(Papel.GESTOR_TECNOLOGIA, criado.getPapel());
+        assertEquals(Papel.ADMIN_MASTER, criado.getPapel());
         assertNotNull(convite.getUsadoEm());
     }
 
@@ -90,10 +90,10 @@ class AuthServiceConviteTest {
         when(convites.findByTokenHash(anyString())).thenReturn(Optional.of(convite));
 
         assertThrows(AppException.class,
-                () -> service.registrar("N", "outro@x.com", "senha12345", Papel.GESTOR_TECNOLOGIA, token));
-        service.registrar("N", "g@x.com", "senha12345", Papel.GESTOR_TECNOLOGIA, token);
+                () -> service.registrar("N", "outro@x.com", "senha12345", Papel.ADMIN_MASTER, token));
+        service.registrar("N", "g@x.com", "senha12345", Papel.ADMIN_MASTER, token);
         assertThrows(AppException.class,
-                () -> service.registrar("N", "g@x.com", "senha12345", Papel.GESTOR_TECNOLOGIA, token));
+                () -> service.registrar("N", "g@x.com", "senha12345", Papel.ADMIN_MASTER, token));
     }
 
     @Test
@@ -101,8 +101,8 @@ class AuthServiceConviteTest {
         UsuarioAutenticado produtor = new UsuarioAutenticado(UUID.randomUUID(), Papel.PRODUTOR_RURAL);
         UsuarioAutenticado agronomo = new UsuarioAutenticado(UUID.randomUUID(), Papel.AGRONOMO);
 
-        assertThrows(AppException.class, () -> service.criarConviteGestor(produtor, "x@x.com"));
-        assertThrows(AppException.class, () -> service.criarConviteGestor(agronomo, "x@x.com"));
+        assertThrows(AppException.class, () -> service.criarConviteMaster(produtor, "x@x.com"));
+        assertThrows(AppException.class, () -> service.criarConviteMaster(agronomo, "x@x.com"));
         verify(convites, never()).save(any());
     }
 

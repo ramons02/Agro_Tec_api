@@ -137,8 +137,8 @@ class IsolamentoContasIT extends IsolamentoBase {
 
     @Test
     void adminNaoConvidaGestorSoOMaster() {
-        ResponseEntity<Map> doAdmin = chamar(HttpMethod.POST, "/api/v1/auth/convites-gestor", adminA, Map.of("email", "novo@iso.test"));
-        ResponseEntity<Map> doMaster = chamar(HttpMethod.POST, "/api/v1/auth/convites-gestor", master, Map.of("email", "novo@iso.test"));
+        ResponseEntity<Map> doAdmin = chamar(HttpMethod.POST, "/api/v1/auth/convites-master", adminA, Map.of("email", "novo@iso.test"));
+        ResponseEntity<Map> doMaster = chamar(HttpMethod.POST, "/api/v1/auth/convites-master", master, Map.of("email", "novo@iso.test"));
 
         assertThat(doAdmin.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(doMaster.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -164,6 +164,23 @@ class IsolamentoContasIT extends IsolamentoBase {
         assertThat(chamar(HttpMethod.POST, base + "/suspender", master, null).getStatusCode()).isEqualTo(HttpStatus.OK);
         // O agronomo aparece na lista dos dois Admins, cada um com os dois grupos informados.
         assertThat(emails(chamar(HttpMethod.GET, "/api/v1/usuarios?page_size=100", adminB, null))).contains(agronomoA.getEmail());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void adminNaoVeOsNomesDosOutrosGruposDeUmAgronomo() {
+        participacaoRepository.save(new ParticipacaoAgronomo(agronomoA.getId(), grupoB.getId(), Instant.now()));
+
+        Map<String, Object> paraOAdmin = ((List<Map<String, Object>>) dados(
+                        chamar(HttpMethod.GET, "/api/v1/usuarios?page_size=100", adminA, null)).get("itens"))
+                .stream().filter(i -> agronomoA.getEmail().equals(i.get("email"))).findFirst().orElseThrow();
+        Map<String, Object> paraOMaster = ((List<Map<String, Object>>) dados(
+                        chamar(HttpMethod.GET, "/api/v1/usuarios?page_size=100", master, null)).get("itens"))
+                .stream().filter(i -> agronomoA.getEmail().equals(i.get("email"))).findFirst().orElseThrow();
+
+        assertThat(((List<Map<String, Object>>) paraOAdmin.get("grupos"))).extracting(g -> g.get("nome")).containsExactly("Grupo A");
+        assertThat(((List<Map<String, Object>>) paraOMaster.get("grupos"))).extracting(g -> g.get("nome"))
+                .containsExactlyInAnyOrder("Grupo A", "Grupo B");
     }
 
     @Test

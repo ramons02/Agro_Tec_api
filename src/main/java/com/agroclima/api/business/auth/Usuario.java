@@ -130,6 +130,11 @@ public class Usuario extends BaseModel<UUID> {
         this.versaoSessao++;
     }
 
+    /** Derruba as sessoes abertas (a versao do token deixa de bater): mudanca de grupo ou de escopo. */
+    public void derrubarSessoes() {
+        this.versaoSessao++;
+    }
+
     /** Registra o pedido de nova senha; um pedido repetido nao muda a data do primeiro. */
     public void pedirNovaSenha(Instant agora) {
         if (this.senhaEsquecidaEm == null) {

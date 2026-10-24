@@ -74,6 +74,13 @@ public class AutorizacaoService {
         }
     }
 
+    /** Acoes de plataforma (criar Admin, mover, reatribuir, convidar Master) so para o Master. */
+    public void exigirMaster(UsuarioAutenticado usuario) {
+        if (!ehMaster(usuario)) {
+            throw new AppException(403, "Somente o administrador da plataforma pode fazer isto.");
+        }
+    }
+
     /** Telas e dados de administracao (contas) so para Admin e Master; 403 explicito para os demais. */
     public void exigirGestor(UsuarioAutenticado usuario) {
         if (!usuario.papel().ehGestor()) {

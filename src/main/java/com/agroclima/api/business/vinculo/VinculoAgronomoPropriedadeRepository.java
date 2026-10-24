@@ -2,6 +2,7 @@ package com.agroclima.api.business.vinculo;
 
 import com.agroclima.api.core.base.ContagemPorUsuario;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,4 +21,10 @@ public interface VinculoAgronomoPropriedadeRepository extends JpaRepository<Vinc
 
     /** Usado pelo job de alerta (feature 017) -- quem mais, alem do dono, recebe alerta desse talhao. */
     List<VinculoAgronomoPropriedade> findByPropriedadeIdAndEstado(UUID propriedadeId, EstadoVinculo estado);
+
+    /** Sai do grupo: os vinculos do agronomo com propriedades daquele grupo deixam de existir (spec 024, FR-016). */
+    @Modifying
+    @Query("DELETE FROM VinculoAgronomoPropriedade v WHERE v.agronomoId = :agronomoId AND v.propriedadeId IN "
+            + "(SELECT p.id FROM com.agroclima.api.business.propriedade.Propriedade p WHERE p.grupoId = :grupoId)")
+    int apagarDoAgronomoNoGrupo(@Param("agronomoId") UUID agronomoId, @Param("grupoId") UUID grupoId);
 }

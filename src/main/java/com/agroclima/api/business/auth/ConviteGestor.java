@@ -10,7 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Convite de uso unico, amarrado a um e-mail, para criar conta GESTOR_TECNOLOGIA. */
+/** Convite de uso unico, amarrado a um e-mail, para criar conta ADMIN_MASTER (spec 024: Admins nascem por criacao direta). */
 @Entity
 @Table(name = "convites_gestor")
 public class ConviteGestor extends BaseModel<UUID> {
@@ -38,6 +38,10 @@ public class ConviteGestor extends BaseModel<UUID> {
     @Column(name = "usado_em")
     private Instant usadoEm;
 
+    /** Papel que o convite cria; a partir da fase 3 so ADMIN_MASTER. */
+    @Column(name = "papel_destino", nullable = false)
+    private String papelDestino = "ADMIN_MASTER";
+
     protected ConviteGestor() {}
 
     public ConviteGestor(String tokenHash, String email, UUID criadoPor) {
@@ -60,6 +64,10 @@ public class ConviteGestor extends BaseModel<UUID> {
     @Override
     public UUID getId() {
         return id;
+    }
+
+    public String getPapelDestino() {
+        return papelDestino;
     }
 
     public Instant getExpiraEm() {

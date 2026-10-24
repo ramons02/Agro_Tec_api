@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +29,10 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID>, JpaSpec
     Optional<Usuario> findFirstByOrderByCriadoEmDesc();
 
     long countByStatus(StatusConta status);
+
+    long countByGrupoId(UUID grupoId);
+
+    List<Usuario> findByGrupoIdAndPapel(UUID grupoId, Papel papel);
 
     long countBySenhaEsquecidaEmIsNotNull();
 
