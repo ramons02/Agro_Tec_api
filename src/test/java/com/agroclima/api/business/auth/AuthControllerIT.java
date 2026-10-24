@@ -52,7 +52,7 @@ class AuthControllerIT extends IntegrationTestBase {
     private ResponseEntity<Map> criarConvite(String tokenGestor, String emailConvidado) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(tokenGestor);
-        return restTemplate.exchange("/api/v1/auth/convites-gestor", HttpMethod.POST,
+        return restTemplate.exchange("/api/v1/auth/convites-master", HttpMethod.POST,
                 new HttpEntity<>(Map.of("email", emailConvidado), headers), Map.class);
     }
 
@@ -93,18 +93,18 @@ class AuthControllerIT extends IntegrationTestBase {
         String conviteToken = link.substring(link.indexOf("convite=") + "convite=".length());
 
         Map<String, Object> corpo = Map.of("nome", "Novo Gestor", "email", "novo-gestor@teste.com",
-                "senha", "senha12345", "papel", "GESTOR_TECNOLOGIA", "convite", conviteToken);
+                "senha", "senha12345", "papel", "ADMIN_MASTER", "convite", conviteToken);
         ResponseEntity<Map> outroEmail = restTemplate.postForEntity("/api/v1/auth/registro",
                 Map.of("nome", "Outro", "email", "outro@teste.com", "senha", "senha12345",
-                        "papel", "GESTOR_TECNOLOGIA", "convite", conviteToken), Map.class);
+                        "papel", "ADMIN_MASTER", "convite", conviteToken), Map.class);
         ResponseEntity<Map> primeiro = restTemplate.postForEntity("/api/v1/auth/registro", corpo, Map.class);
         ResponseEntity<Map> reuso = restTemplate.postForEntity("/api/v1/auth/registro",
                 Map.of("nome", "Novo Gestor", "email", "novo-gestor@teste.com", "senha", "senha12345",
-                        "papel", "GESTOR_TECNOLOGIA", "convite", conviteToken), Map.class);
+                        "papel", "ADMIN_MASTER", "convite", conviteToken), Map.class);
 
         assertThat(outroEmail.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(primeiro.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(dados(primeiro).get("papel")).isEqualTo("GESTOR_TECNOLOGIA");
+        assertThat(dados(primeiro).get("papel")).isEqualTo("ADMIN_MASTER");
         assertThat(reuso.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 

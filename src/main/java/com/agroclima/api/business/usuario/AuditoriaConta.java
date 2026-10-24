@@ -40,6 +40,10 @@ public class AuditoriaConta extends BaseModel<UUID> {
     @Column(name = "criado_em", nullable = false)
     private Instant criadoEm;
 
+    /** Grupo afetado quando a acao e sobre um grupo (mover, reatribuir, remover do grupo, novo Admin). */
+    @Column(name = "alvo_grupo_id")
+    private UUID alvoGrupoId;
+
     protected AuditoriaConta() {}
 
     public AuditoriaConta(
@@ -51,6 +55,15 @@ public class AuditoriaConta extends BaseModel<UUID> {
         this.alvoEmail = alvoEmail;
         this.detalhe = detalhe;
         this.criadoEm = criadoEm;
+    }
+
+    public AuditoriaConta comGrupo(UUID grupoId) {
+        this.alvoGrupoId = grupoId;
+        return this;
+    }
+
+    public UUID getAlvoGrupoId() {
+        return alvoGrupoId;
     }
 
     @Override

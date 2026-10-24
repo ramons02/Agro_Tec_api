@@ -73,7 +73,12 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "POST /api/v1/usuarios/{id}/reativar",
             "POST /api/v1/usuarios/{id}/redefinir-senha",
             "PATCH /api/v1/usuarios/{id}",
-            "POST /api/v1/auth/convites-gestor");
+            "POST /api/v1/auth/convites-master",
+            "GET /api/v1/grupos",
+            "POST /api/v1/grupos",
+            "POST /api/v1/usuarios/{id}/mover",
+            "POST /api/v1/grupos/{id}/reatribuir",
+            "DELETE /api/v1/grupos/{id}/agronomos/{agronomoId}");
 
     /** Rotas que, por desenho, nao tem escopo de grupo: publicas, da propria conta ou sem dado de ninguem. */
     public static final Set<String> ROTAS_SEM_ESCOPO_DE_GRUPO = Set.of(
@@ -182,6 +187,11 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
         VinculoAgronomoPropriedade vinculo = new VinculoAgronomoPropriedade(agronomo.getId(), propriedade.getId());
         vinculo.aceitar(Instant.now());
         vinculoRepository.save(vinculo);
+    }
+
+    /** A conta como esta no banco agora (versao de sessao atual): use depois de uma acao que derruba sessoes. */
+    protected Usuario atual(Usuario usuario) {
+        return usuarioRepository.findById(usuario.getId()).orElseThrow();
     }
 
     /** Token valido para a conta (o papel e o grupo valem pelo banco). */

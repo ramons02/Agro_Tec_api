@@ -99,10 +99,11 @@ public class AuthController {
         return http.getRemoteAddr();
     }
 
-    @PostMapping("/convites-gestor")
-    public ResponseEntity<ApiEnvelope<Map<String, Object>>> convidarGestor(
+    /** Convite de uso unico para um novo Admin Master (spec 024). Admins nascem por criacao direta, em POST /grupos. */
+    @PostMapping("/convites-master")
+    public ResponseEntity<ApiEnvelope<Map<String, Object>>> convidarMaster(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @Valid @RequestBody ConviteGestorRequest requisicao) {
-        AuthService.ConviteCriado convite = authService.criarConviteGestor(usuario, requisicao.email());
+        AuthService.ConviteCriado convite = authService.criarConviteMaster(usuario, requisicao.email());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.sucesso(Map.of(
                 "link", convite.link(),
                 "expira_em", convite.expiraEm().toString())));

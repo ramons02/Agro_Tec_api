@@ -162,6 +162,11 @@ public class GestaoUsuariosService {
         Map<UUID, Long> propriedadesPorUsuario = contarPropriedades(pagina.getContent());
         Map<UUID, GrupoResumo> gruposPorId = nomesDosGrupos(pagina.getContent());
         Map<UUID, List<GrupoResumo>> gruposDosAgronomos = gruposDosAgronomos(pagina.getContent(), gruposPorId);
+        // O Admin nao ve o nome dos outros grupos de um agronomo: so o dele (isolamento entre clientes).
+        if (!autorizacaoService.ehMaster(solicitante)) {
+            UUID proprio = autorizacaoService.grupoDe(solicitante).orElse(null);
+            gruposDosAgronomos.replaceAll((id, lista) -> lista.stream().filter(g -> g.id().equals(proprio)).toList());
+        }
         List<ItemUsuario> itens = pagina.getContent().stream()
                 .map(u -> new ItemUsuario(
                         u.getId(),
@@ -509,7 +514,7 @@ public class GestaoUsuariosService {
     private Map<UUID, List<GrupoResumo>> gruposDosAgronomos(List<Usuario> usuarios, Map<UUID, GrupoResumo> nomes) {
         List<UUID> agronomos = idsDoPapel(usuarios, Papel.AGRONOMO);
         if (agronomos.isEmpty()) {
-            return Map.of();
+            return new java.util.HashMap<>();
         }
         Map<UUID, List<GrupoResumo>> resultado = new java.util.HashMap<>();
         for (ParticipacaoAgronomo p : participacaoRepository.findByIdAgronomoIdIn(agronomos)) {

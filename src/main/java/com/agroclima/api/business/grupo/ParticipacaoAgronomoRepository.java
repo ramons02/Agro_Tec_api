@@ -11,5 +11,9 @@ public interface ParticipacaoAgronomoRepository extends JpaRepository<Participac
 
     long countByIdAgronomoId(UUID agronomoId);
 
+    List<ParticipacaoAgronomo> findByIdGrupoId(UUID grupoId);
+
+    long countByIdGrupoId(UUID grupoId);
+
     List<ParticipacaoAgronomo> findByIdAgronomoIdIn(java.util.Collection<UUID> agronomoIds);
 }

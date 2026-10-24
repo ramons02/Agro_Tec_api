@@ -4,6 +4,7 @@ import com.agroclima.api.core.base.ContagemPorUsuario;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +23,11 @@ public interface PropriedadeRepository extends JpaRepository<Propriedade, UUID> 
 
     @Query("SELECT p.id FROM Propriedade p WHERE p.proprietarioId = :proprietarioId")
     List<UUID> findIdByProprietarioId(@Param("proprietarioId") UUID proprietarioId);
+
+    /** Mudanca de grupo do dono: as propriedades dele (e, por elas, os talhoes) acompanham (spec 024, FR-003). */
+    @Modifying
+    @Query("UPDATE Propriedade p SET p.grupoId = :grupoId WHERE p.proprietarioId = :donoId")
+    int atualizarGrupoDoDono(@Param("donoId") UUID donoId, @Param("grupoId") UUID grupoId);
 
     /** Propriedades de um grupo (Admin ve o grupo todo; spec 024). */
     @Query("SELECT p.id FROM Propriedade p WHERE p.grupoId = :grupoId")
