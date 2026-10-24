@@ -57,6 +57,14 @@ public class GrupoController {
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ApiEnvelope.sucesso(criado));
     }
 
+    /** Novo link de cadastro do grupo; o anterior deixa de valer na hora. O link so e mostrado nesta resposta. */
+    @PostMapping("/grupos/{id}/novo-link")
+    public ResponseEntity<ApiEnvelope<GrupoService.NovoLink>> novoLink(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiEnvelope.sucesso(grupoService.gerarNovoLink(usuario, id)));
+    }
+
     @PostMapping("/usuarios/{id}/mover")
     public ApiEnvelope<Map<String, String>> mover(
             @AuthenticationPrincipal UsuarioAutenticado usuario,

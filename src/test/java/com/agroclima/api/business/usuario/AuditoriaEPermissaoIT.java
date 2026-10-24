@@ -18,7 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuditoriaEPermissaoIT extends GestaoContasITBase {
 
     private Usuario pendente(String email) {
-        return usuarioRepository.save(Usuario.pendente("Pendente", email, Papel.PRODUTOR_RURAL, Instant.now()));
+        // Como se tivesse chegado pelo link do grupo: o Master so confirma pendente sem grupo escolhendo um.
+        Usuario pendente = Usuario.pendente("Pendente", email, Papel.PRODUTOR_RURAL, Instant.now());
+        pendente.definirGrupo(grupoInicial.getId());
+        return usuarioRepository.save(pendente);
     }
 
     @Test

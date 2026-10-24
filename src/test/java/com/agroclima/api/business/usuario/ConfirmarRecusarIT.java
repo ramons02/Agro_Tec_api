@@ -43,6 +43,7 @@ class ConfirmarRecusarIT extends IntegrationTestBase {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    private com.agroclima.api.business.grupo.Grupo grupoInicial;
     private Usuario gestor;
     private String tokenGestor;
 
@@ -50,7 +51,7 @@ class ConfirmarRecusarIT extends IntegrationTestBase {
     void preparar() {
         gestor = usuarioRepository.save(
                 new Usuario("Gestor", "gestor@teste.com", passwordEncoder.encode("senha12345"), Papel.ADMIN_MASTER));
-        GruposDeTeste.criarGrupo(grupoRepository, usuarioRepository, "Grupo inicial", gestor);
+        grupoInicial = GruposDeTeste.criarGrupo(grupoRepository, usuarioRepository, "Grupo inicial", gestor);
         tokenGestor = login("gestor@teste.com", "senha12345");
     }
 
@@ -75,7 +76,10 @@ class ConfirmarRecusarIT extends IntegrationTestBase {
     }
 
     private Usuario pendente(String email) {
-        return usuarioRepository.save(Usuario.pendente("Pessoa " + email, email, Papel.PRODUTOR_RURAL, Instant.now()));
+        // Como se tivesse chegado pelo link do grupo: o Master so confirma pendente sem grupo escolhendo um.
+        Usuario pendente = Usuario.pendente("Pessoa " + email, email, Papel.PRODUTOR_RURAL, Instant.now());
+        pendente.definirGrupo(grupoInicial.getId());
+        return usuarioRepository.save(pendente);
     }
 
     @Test
