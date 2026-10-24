@@ -2,6 +2,7 @@ package com.agroclima.api.core.config;
 
 import com.agroclima.api.core.security.JwtAuthenticationEntryPoint;
 import com.agroclima.api.core.security.JwtAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -49,6 +50,10 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
+                        // O despacho de erro (/error) nao passa pelo filtro JWT (OncePerRequestFilter ja rodou
+                        // na requisicao original); sem isto, qualquer erro do container/Spring que nao caia no
+                        // GlobalExceptionHandler virava 401 "Token ausente ou expirado" para quem estava logado.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/health").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/login",
