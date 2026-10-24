@@ -24,7 +24,7 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:chave-de-desenvolvimento-trocar-em-producao}
+    secret: ${JWT_SECRET}
     algorithm: HS256
     expiration-hours: 24
   cors:

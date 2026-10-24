@@ -10,6 +10,7 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -28,8 +29,16 @@ public class JwtService {
     private final SecretKey chave;
     private final Duration validade;
 
+    private static final int TAMANHO_MINIMO_SEGREDO_BYTES = 32;
+
     public JwtService(AppProperties appProperties) {
-        this.chave = Keys.hmacShaKeyFor(appProperties.jwt().secret().getBytes());
+        String segredo = appProperties.jwt().secret();
+        if (segredo == null || segredo.getBytes(StandardCharsets.UTF_8).length < TAMANHO_MINIMO_SEGREDO_BYTES) {
+            throw new IllegalStateException(
+                    "JWT_SECRET ausente ou com menos de " + TAMANHO_MINIMO_SEGREDO_BYTES
+                            + " bytes. Gere um com `openssl rand -hex 32`.");
+        }
+        this.chave = Keys.hmacShaKeyFor(segredo.getBytes(StandardCharsets.UTF_8));
         this.validade = Duration.ofHours(appProperties.jwt().expirationHours());
     }
 
