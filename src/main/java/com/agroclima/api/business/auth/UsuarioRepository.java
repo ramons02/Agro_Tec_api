@@ -29,6 +29,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID>, JpaSpec
 
     long countByStatus(StatusConta status);
 
+    long countBySenhaEsquecidaEmIsNotNull();
+
     long countByPapelAndStatus(Papel papel, StatusConta status);
 
     /** Bloqueia a linha ate o fim da transacao: duas acoes de gestao na mesma conta nao se atropelam (R6). */

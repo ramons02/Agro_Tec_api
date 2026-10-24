@@ -122,7 +122,9 @@ class GestaoUsuariosControllerIT extends IntegrationTestBase {
     void listaNuncaExpoeSenhaOuHash() {
         String corpo = get("/api/v1/usuarios", gestor).getBody().toString();
 
-        assertThat(corpo).doesNotContain("hash-segredo").doesNotContain("senha");
+        // "senha_esquecida_em" (pedido de nova senha) e um campo legitimo; o que nunca sai e a senha em si.
+        assertThat(corpo).doesNotContain("hash-segredo").doesNotContain("senha_hash").doesNotContain("senha_temporaria")
+                .doesNotContain("$2a$");
     }
 
     @Test

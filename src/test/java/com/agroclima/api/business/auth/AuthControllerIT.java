@@ -177,7 +177,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void recuperarSenhaRetornaMensagemIdenticaExistaOuNaoOEmail() {
-        contaAtiva("Recupera Teste", "recupera@teste.com", "senha12345", Papel.PRODUTOR_RURAL);
+        contaAtiva("Recupera Teste", "recupera@teste.com", "senha12345", Papel.GESTOR_TECNOLOGIA);
 
         ResponseEntity<Map> comEmail = restTemplate.postForEntity(
                 "/api/v1/auth/recuperar-senha", Map.of("email", "recupera@teste.com"), Map.class);
@@ -192,7 +192,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void redefinirSenhaComTokenValidoTrocaSenha() {
-        contaAtiva("Redefine Teste", "redefine@teste.com", "senhaAntiga1", Papel.PRODUTOR_RURAL);
+        contaAtiva("Redefine Teste", "redefine@teste.com", "senhaAntiga1", Papel.GESTOR_TECNOLOGIA);
         restTemplate.postForEntity("/api/v1/auth/recuperar-senha", Map.of("email", "redefine@teste.com"), Map.class);
         String token = tokenRepository.findAll().get(0).getToken();
 
@@ -211,7 +211,7 @@ class AuthControllerIT extends IntegrationTestBase {
 
     @Test
     void redefinirSenhaComTokenJaUsadoFalha() {
-        contaAtiva("Token Usado", "tokenusado@teste.com", "senhaOriginal1", Papel.PRODUTOR_RURAL);
+        contaAtiva("Token Usado", "tokenusado@teste.com", "senhaOriginal1", Papel.GESTOR_TECNOLOGIA);
         restTemplate.postForEntity("/api/v1/auth/recuperar-senha", Map.of("email", "tokenusado@teste.com"), Map.class);
         String token = tokenRepository.findAll().get(0).getToken();
 

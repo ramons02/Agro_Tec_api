@@ -93,7 +93,8 @@ public class GestaoUsuariosService {
             StatusConta status,
             Instant criadoEm,
             boolean telegramVinculado,
-            long propriedades) {}
+            long propriedades,
+            Instant senhaEsquecidaEm) {}
 
     public record EventoHistorico(AcaoAuditoria acao, String atorNome, String detalhe, Instant criadoEm) {}
 
@@ -106,6 +107,7 @@ public class GestaoUsuariosService {
             StatusConta status,
             boolean precisaTrocarSenha,
             String motivoSuspensao,
+            Instant senhaEsquecidaEm,
             Instant criadoEm,
             List<EventoHistorico> historico) {}
 
@@ -119,17 +121,24 @@ public class GestaoUsuariosService {
             long cadastrosSemana,
             long cadastrosMes,
             Instant ultimoCadastroEm,
-            long pendentes) {}
+            long pendentes,
+            long senhasEsquecidas) {}
 
     @Transactional(readOnly = true)
     public Page<ItemUsuario> listar(
-            UsuarioAutenticado solicitante, Papel papel, StatusConta status, String busca, int page, int pageSize) {
+            UsuarioAutenticado solicitante,
+            Papel papel,
+            StatusConta status,
+            boolean esqueceuSenha,
+            String busca,
+            int page,
+            int pageSize) {
         autorizacaoService.exigirGestor(solicitante);
 
         int tamanho = Math.min(Math.max(pageSize, 1), TAMANHO_PAGINA_MAXIMO);
         Pageable pageable = PageRequest.of(
                 Math.max(page - 1, 0), tamanho, Sort.by(Sort.Direction.DESC, "criadoEm").and(Sort.by("id")));
-        Page<Usuario> pagina = usuarioRepository.findAll(filtro(papel, status, busca), pageable);
+        Page<Usuario> pagina = usuarioRepository.findAll(filtro(papel, status, esqueceuSenha, busca), pageable);
 
         Map<UUID, Long> propriedadesPorUsuario = contarPropriedades(pagina.getContent());
         List<ItemUsuario> itens = pagina.getContent().stream()
@@ -141,7 +150,8 @@ public class GestaoUsuariosService {
                         u.getStatus(),
                         u.getCriadoEm(),
                         u.getTelegramChatId() != null && !u.getTelegramChatId().isBlank(),
-                        propriedadesPorUsuario.getOrDefault(u.getId(), 0L)))
+                        propriedadesPorUsuario.getOrDefault(u.getId(), 0L),
+                        u.getSenhaEsquecidaEm()))
                 .toList();
         return new PageImpl<>(itens, pageable, pagina.getTotalElements());
     }
@@ -161,7 +171,8 @@ public class GestaoUsuariosService {
                 usuarioRepository.countByCriadoEmAfter(agora.minus(Duration.ofDays(7))),
                 usuarioRepository.countByCriadoEmAfter(agora.minus(Duration.ofDays(30))),
                 usuarioRepository.findFirstByOrderByCriadoEmDesc().map(Usuario::getCriadoEm).orElse(null),
-                usuarioRepository.countByStatus(StatusConta.PENDENTE));
+                usuarioRepository.countByStatus(StatusConta.PENDENTE),
+                usuarioRepository.countBySenhaEsquecidaEmIsNotNull());
     }
 
     /** PENDENTE -> ATIVA: gera a senha temporaria, mostrada uma unica vez, e marca a troca obrigatoria. */
@@ -203,6 +214,7 @@ public class GestaoUsuariosService {
                 usuario.getStatus(),
                 usuario.isPrecisaTrocarSenha(),
                 usuario.getMotivoSuspensao(),
+                usuario.getSenhaEsquecidaEm(),
                 usuario.getCriadoEm(),
                 historico);
     }
@@ -335,11 +347,14 @@ public class GestaoUsuariosService {
         auditoriaRepository.save(new AuditoriaConta(ator.id(), acao, alvo.getId(), alvo.getEmail(), detalhe, agora));
     }
 
-    private Specification<Usuario> filtro(Papel papel, StatusConta status, String busca) {
+    private Specification<Usuario> filtro(Papel papel, StatusConta status, boolean esqueceuSenha, String busca) {
         return (root, query, cb) -> {
             List<Predicate> condicoes = new ArrayList<>();
             if (papel != null) {
                 condicoes.add(cb.equal(root.get("papel"), papel));
+            }
+            if (esqueceuSenha) {
+                condicoes.add(cb.isNotNull(root.get("senhaEsquecidaEm")));
             }
             if (status != null) {
                 condicoes.add(cb.equal(root.get("status"), status));

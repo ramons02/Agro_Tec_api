@@ -16,7 +16,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Recuperacao de senha por e-mail (HU-13) diante dos novos estados da conta (spec 022, edge cases). */
+/** Recuperacao de senha por e-mail (HU-13, so gestor) diante dos novos estados da conta (spec 022, edge cases). */
 class RecuperacaoContaEstadoIT extends IntegrationTestBase {
 
     @Autowired
@@ -54,7 +54,7 @@ class RecuperacaoContaEstadoIT extends IntegrationTestBase {
     }
 
     private Usuario ativa(String email, String senha) {
-        return usuarioRepository.save(new Usuario("Ativa", email, passwordEncoder.encode(senha), Papel.PRODUTOR_RURAL));
+        return usuarioRepository.save(new Usuario("Ativa", email, passwordEncoder.encode(senha), Papel.GESTOR_TECNOLOGIA));
     }
 
     @Test
@@ -119,7 +119,7 @@ class RecuperacaoContaEstadoIT extends IntegrationTestBase {
 
     @Test
     void redefinicaoPorEmailLimpaATrocaObrigatoriaEAExpiracaoDaSenhaTemporaria() {
-        Usuario usuario = usuarioRepository.save(Usuario.criadaPeloGestor("T", "temp@teste.com", Papel.PRODUTOR_RURAL,
+        Usuario usuario = usuarioRepository.save(Usuario.criadaPeloGestor("T", "temp@teste.com", Papel.GESTOR_TECNOLOGIA,
                 passwordEncoder.encode("Temporaria123"), Instant.now(), Instant.now().plusSeconds(3600)));
         recuperar(usuario.getEmail());
         String token = tokenRepository.findAll().get(0).getToken();
