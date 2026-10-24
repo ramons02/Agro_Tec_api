@@ -24,7 +24,8 @@ public record AppProperties(
     public record Inmet(String baseUrl) {}
 
     /** baseUrl override-avel em teste (WireMock) -- em producao aponta pra API real do Open-Meteo. */
-    public record Openmeteo(String baseUrl) {}
+    /** proxyKey vazio = nao envia X-Proxy-Key; o Worker da Cloudflare so cobra a chave quando a tem configurada. */
+    public record Openmeteo(String baseUrl, String proxyKey) {}
 
     /** url vazia/ausente = CacheRedisService nunca tenta conectar (spec 018, RNF019). */
     public record Redis(String url) {}

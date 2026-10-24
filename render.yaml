@@ -33,5 +33,9 @@ services:
         sync: false
       - key: INMET_BASE_URL
         value: https://apitempo.inmet.gov.br
+      # O Render usa IP de saida compartilhado que o Open-Meteo bloqueia (429); o trafego passa pelo
+      # Worker da Cloudflare (Agro_Tec_infra/cloudflare-openmeteo-proxy), que exige X-Proxy-Key.
       - key: OPENMETEO_BASE_URL
-        value: https://api.open-meteo.com
+        value: https://agroclima-openmeteo-proxy.cloudflare-openmeteo-proxy.workers.dev
+      - key: OPENMETEO_PROXY_KEY
+        sync: false
