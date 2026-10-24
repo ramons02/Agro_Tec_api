@@ -42,7 +42,7 @@ class OpenMeteoClientProxyKeyTest {
 
     private OpenMeteoClient cliente(String proxyKey) {
         AppProperties props = new AppProperties(
-                null, null, null, null, null, new AppProperties.Openmeteo(MOCK.baseUrl(), proxyKey), null, null);
+                null, null, null, null, new AppProperties.Openmeteo(MOCK.baseUrl(), proxyKey), null);
         return new OpenMeteoClient(props);
     }
 

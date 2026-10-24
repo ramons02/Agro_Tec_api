@@ -32,7 +32,7 @@ class AuthServiceConviteTest {
     void preparar() {
         usuarios = mock(UsuarioRepository.class);
         convites = mock(ConviteGestorRepository.class);
-        AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null, null, null);
+        AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, mock(TokenRecuperacaoSenhaRepository.class), convites,
                 new BCryptPasswordEncoder(), mock(JwtService.class), mock(EmailService.class), props);
         when(usuarios.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));

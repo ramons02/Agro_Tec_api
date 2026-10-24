@@ -30,7 +30,7 @@ import java.util.UUID;
  * mesma logica do endpoint /pulverizacao) e dispara alerta na transicao bloqueada->FAVORAVEL
  * (US2) ou quando a rajada atual ultrapassa o limiar de vento forte (US3), independente de
  * transicao de estado. Falha de leitura climatica ou de envio nunca interrompe os demais
- * talhoes (FR-004, mesma degradacao graciosa do INMET/SoilGrids).
+ * talhoes (FR-004, mesma degradacao graciosa do Open-Meteo/SoilGrids).
  */
 @Service
 public class AlertaPulverizacaoService {

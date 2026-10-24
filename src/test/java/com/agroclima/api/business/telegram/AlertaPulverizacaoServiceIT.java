@@ -3,11 +3,6 @@ package com.agroclima.api.business.telegram;
 import com.agroclima.api.business.auth.Papel;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
-import com.agroclima.api.business.estacao.EstacaoInmet;
-import com.agroclima.api.business.estacao.EstacaoInmetRepository;
-import com.agroclima.api.business.estacao.FonteDados;
-import com.agroclima.api.business.estacao.MedicaoClima;
-import com.agroclima.api.business.estacao.MedicaoClimaRepository;
 import com.agroclima.api.business.propriedade.Propriedade;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.business.talhao.Talhao;
@@ -28,9 +23,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Espelha spec.md (feature 017, US2/US3) -- estados montados diretamente no banco (nao via
- * ingestao real), fresco o bastante (Instant.now()) pra climarTempoRealService nunca precisar
- * chamar INMET/Open-Meteo de verdade. */
+/** Espelha spec.md (feature 017, US2/US3) -- o clima de cada cenario vem de um stub do Open-Meteo
+ * (WireMock), nunca da rede real. */
 class AlertaPulverizacaoServiceIT extends TelegramIntegrationTestBase {
 
     private static final double LON = -47.90;
@@ -44,12 +38,6 @@ class AlertaPulverizacaoServiceIT extends TelegramIntegrationTestBase {
 
     @Autowired
     private TalhaoRepository talhaoRepository;
-
-    @Autowired
-    private EstacaoInmetRepository estacaoInmetRepository;
-
-    @Autowired
-    private MedicaoClimaRepository medicaoClimaRepository;
 
     @Autowired
     private EstadoAlertaPulverizacaoRepository estadoAlertaPulverizacaoRepository;
@@ -74,7 +62,7 @@ class AlertaPulverizacaoServiceIT extends TelegramIntegrationTestBase {
 
     private record Fixture(Talhao talhao) {}
 
-    /** ventoMs/rajadaMs em m/s (mesma unidade de MedicaoClima); telegramChatId nulo = dono sem
+    /** ventoMs/rajadaMs em m/s (convertidos pra km/h no stub); telegramChatId nulo = dono sem
      * Telegram vinculado (cenario de "nunca gera chamada"). */
     private Fixture prepararFixture(String email, String telegramChatId, double deslocamento, double ventoMs,
             double rajadaMs, double temperaturaC, double umidadePct) {
@@ -93,11 +81,7 @@ class AlertaPulverizacaoServiceIT extends TelegramIntegrationTestBase {
                 GeometriaUtil.normalizarParaMultiPolygon(quadrado(lon, lat, 0.01)), 50.0);
         talhao = talhaoRepository.save(talhao);
 
-        var posicao = GeometriaUtil.FACTORY_4326.createPoint(new Coordinate(lon + 0.02, lat + 0.02));
-        EstacaoInmet estacao = estacaoInmetRepository.save(
-                new EstacaoInmet("ALT" + (int) (deslocamento * 1000), "Estação Alerta", "PA", posicao));
-        medicaoClimaRepository.save(new MedicaoClima(
-                estacao.getCodigo(), Instant.now(), 0.0, temperaturaC, umidadePct, ventoMs, rajadaMs, FonteDados.AO_VIVO));
+        stubOpenMeteoCondicaoAtual(temperaturaC, umidadePct, ventoMs * 3.6, rajadaMs * 3.6, 0.0);
 
         return new Fixture(talhao);
     }

@@ -38,7 +38,7 @@ class AuthServiceRateLimitTest {
         PasswordEncoder encoder = new BCryptPasswordEncoder();
         JwtService jwt = mock(JwtService.class);
         when(jwt.criarToken(any(), any())).thenReturn(new JwtService.TokenGerado("t", Instant.now()));
-        AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null, null, null);
+        AppProperties props = new AppProperties(null, null, "https://app.exemplo", null, null, null);
         service = new AuthService(usuarios, tokens, mock(ConviteGestorRepository.class), encoder, jwt, email, props);
         usuario = new Usuario("Fulano", "fulano@x.com", encoder.encode("senha-correta"), Papel.PRODUTOR_RURAL);
         when(usuarios.findByEmail("fulano@x.com")).thenReturn(Optional.of(usuario));

@@ -41,7 +41,6 @@ public class ClimaController {
                 .orElseThrow(() -> new AppException(404, "Nenhuma medição disponível para este talhão ainda."));
 
         Map<String, Object> dados = new java.util.HashMap<>();
-        dados.put("estacao", resultado.estacaoCodigo());
         dados.put("chuva_mm", resultado.chuvaMm());
         dados.put("vento_kmh", resultado.ventoKmh());
         dados.put("rajada_kmh", resultado.rajadaKmh());

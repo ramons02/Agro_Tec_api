@@ -1,11 +1,9 @@
 package com.agroclima.api.business.balancohidrico;
 
+import com.agroclima.api.business.clima.clients.DadosDiarios;
 import com.agroclima.api.business.clima.clients.FontePrevisaoIndisponivelException;
 import com.agroclima.api.business.clima.clients.OpenMeteoClient;
 import com.agroclima.api.business.clima.clients.PrevisaoClimatica;
-import com.agroclima.api.business.estacao.EstacaoInmetRepository;
-import com.agroclima.api.business.estacao.EstacaoProximaProjecao;
-import com.agroclima.api.business.estacao.MedicaoClimaRepository;
 import com.agroclima.api.business.talhao.Talhao;
 import com.agroclima.api.business.talhao.TalhaoRepository;
 import com.agroclima.api.core.calculos.BalancoHidricoCalculos;
@@ -16,16 +14,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Espelha app/services/balanco_hidrico_service.py (feature 010, RN007/RD010/RN023).
- * calcularBalancoHidricoTodosTalhoes fica pronta pra Fase 8 conectar no scheduler diario.
+ * Espelha app/services/balanco_hidrico_service.py (feature 010, RN007/RD010/RN023). Sem estacoes:
+ * a chuva e a ET0 do dia vem da analise do modelo do Open-Meteo no ponto do talhao (dado de um dia ja
+ * ocorrido, nunca previsao). O calculo roda para o dia anterior, que ja esta completo.
  */
 @Service
 public class BalancoHidricoService {
@@ -33,22 +30,16 @@ public class BalancoHidricoService {
     private static final Logger log = LoggerFactory.getLogger(BalancoHidricoService.class);
 
     private final TalhaoRepository talhaoRepository;
-    private final EstacaoInmetRepository estacaoInmetRepository;
-    private final MedicaoClimaRepository medicaoClimaRepository;
     private final BalancoHidricoDiarioRepository balancoHidricoDiarioRepository;
     private final CulturaKcRepository culturaKcRepository;
     private final OpenMeteoClient openMeteoClient;
 
     public BalancoHidricoService(
             TalhaoRepository talhaoRepository,
-            EstacaoInmetRepository estacaoInmetRepository,
-            MedicaoClimaRepository medicaoClimaRepository,
             BalancoHidricoDiarioRepository balancoHidricoDiarioRepository,
             CulturaKcRepository culturaKcRepository,
             OpenMeteoClient openMeteoClient) {
         this.talhaoRepository = talhaoRepository;
-        this.estacaoInmetRepository = estacaoInmetRepository;
-        this.medicaoClimaRepository = medicaoClimaRepository;
         this.balancoHidricoDiarioRepository = balancoHidricoDiarioRepository;
         this.culturaKcRepository = culturaKcRepository;
         this.openMeteoClient = openMeteoClient;
@@ -61,20 +52,17 @@ public class BalancoHidricoService {
         }
         double cad = talhao.getCapacidadeAguaDisponivelMm();
 
-        List<EstacaoProximaProjecao> estacoes =
-                estacaoInmetRepository.buscarMaisProximas(talhao.getGeometria().getCentroid(), 1);
-        if (estacoes.isEmpty()) {
+        var centroide = talhao.getGeometria().getCentroid();
+        DadosDiarios dia;
+        try {
+            dia = openMeteoClient.obterDadosDiarios(centroide.getY(), centroide.getX(), dataAlvo);
+        } catch (FontePrevisaoIndisponivelException ex) {
+            log.warn("Open-Meteo indisponível pro balanço hídrico do talhão {}: {}", talhao.getId(), ex.getMessage());
             return Optional.empty();
         }
-        String estacaoCodigo = estacoes.get(0).getCodigo();
-
-        Instant inicioDia = dataAlvo.atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant fimDia = dataAlvo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        // Sem nenhuma leitura real de precipitacao no dia (INMET fora do ar e o fallback
-        // Open-Meteo nao mede chuva), nao da pra saber se choveu -- nao assume 0mm real,
-        // pula o calculo do dia e mantem o ultimo armazenamento conhecido (RN007 exige
-        // chuva medida, nunca prevista, RN009).
-        if (!medicaoClimaRepository.existePrecipitacaoMedidaNoIntervalo(estacaoCodigo, inicioDia, fimDia)) {
+        // Sem valor de chuva do dia nao da pra saber se choveu: nao assume 0 mm, pula o calculo e
+        // mantem o ultimo armazenamento conhecido (RN007 exige chuva ocorrida, nunca prevista).
+        if (dia.precipitacaoMm() == null) {
             return Optional.empty();
         }
 
@@ -83,17 +71,14 @@ public class BalancoHidricoService {
                 .map(BalancoHidricoDiario::getArmazenamentoMm)
                 .orElseGet(() -> BalancoHidricoCalculos.armazenamentoInicial(cad));
 
-        double precipitacaoMedida = medicaoClimaRepository.somarPrecipitacaoNoIntervalo(estacaoCodigo, inicioDia, fimDia);
-
-        double et0 = 0.0;
+        double precipitacaoMedida = dia.precipitacaoMm();
+        double et0 = dia.et0Mm() != null ? dia.et0Mm() : 0.0;
         double chuvaPrevistaMm = 0.0;
         try {
-            var centroide = talhao.getGeometria().getCentroid();
             PrevisaoClimatica previsao = openMeteoClient.obterPrevisao(centroide.getY(), centroide.getX());
-            et0 = previsao.evapotranspiracaoMm();
             chuvaPrevistaMm = previsao.precipitacaoPrevistaMm();
         } catch (FontePrevisaoIndisponivelException ex) {
-            log.warn("Open-Meteo indisponível pro balanço hídrico do talhão {}: {}", talhao.getId(), ex.getMessage());
+            log.warn("Open-Meteo indisponível pra chuva prevista do talhão {}: {}", talhao.getId(), ex.getMessage());
         }
 
         double kc = obterKcDinamico(talhao, dataAlvo);
@@ -125,10 +110,11 @@ public class BalancoHidricoService {
 
     @Transactional
     public ResumoBalancoHidrico calcularBalancoHidricoTodosTalhoes() {
-        LocalDate hoje = LocalDate.now(ZoneOffset.UTC);
+        // Dia anterior (UTC): ja completo, entao a chuva e a ET0 do dia estao fechadas no provedor.
+        LocalDate ontem = LocalDate.now(ZoneOffset.UTC).minusDays(1);
         int calculados = 0;
         for (Talhao talhao : talhaoRepository.findAll()) {
-            if (calcularBalancoHidricoDoTalhao(talhao, hoje).isPresent()) {
+            if (calcularBalancoHidricoDoTalhao(talhao, ontem).isPresent()) {
                 calculados++;
             }
         }

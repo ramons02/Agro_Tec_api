@@ -1,54 +1,34 @@
 package com.agroclima.api.business.clima;
 
-import com.agroclima.api.business.estacao.EstacaoInmet;
-import com.agroclima.api.business.estacao.EstacaoInmetRepository;
-import com.agroclima.api.business.estacao.EstacaoProximaProjecao;
-import com.agroclima.api.business.estacao.FonteDados;
-import com.agroclima.api.business.estacao.MedicaoClima;
-import com.agroclima.api.business.estacao.MedicaoClimaRepository;
+import com.agroclima.api.business.clima.clients.CondicaoAtual;
+import com.agroclima.api.business.clima.clients.FontePrevisaoIndisponivelException;
+import com.agroclima.api.business.clima.clients.MetNorwayClient;
+import com.agroclima.api.business.clima.clients.OpenMeteoClient;
 import com.agroclima.api.business.talhao.Talhao;
-import com.agroclima.api.core.calculos.IdwCalculos;
-import com.agroclima.api.core.calculos.PulverizacaoCalculos;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import org.locationtech.jts.geom.Point;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Function;
 
 /**
- * Espelha app/services/clima_tempo_real_service.py (feature 008, RN008/RN017, IDW entre
- * ate 3 estacoes -- Escopo V3/RF035). Lock por estacao so em memoria -- limitacao de
- * instancia unica, mesma nota do Python; virar lock distribuido (Redis) so se/quando
- * houver multiplas instancias.
+ * Clima atual de um talhao no centroide dele (RF033, RN008, RN017). Sem estacoes: Open-Meteo
+ * primeiro; se falhar, MET Norway; se os dois falharem, a ultima leitura boa daquele ponto (ate
+ * 6 h) volta marcada CACHE_EXPIRADO -- nunca erro bloqueante quando ja houve uma leitura (RN017).
+ * E sempre valor de modelo, nunca medicao de estacao.
  */
 @Service
 public class ClimaTempoRealService {
 
-    private static final Duration LIMITE_STALENESS = Duration.ofMinutes(30);
-    private static final int LIMITE_ESTACOES_IDW = 3;
-
-    private final EstacaoInmetRepository estacaoInmetRepository;
-    private final MedicaoClimaRepository medicaoClimaRepository;
-    private final IngestaoService ingestaoService;
-    private final ConcurrentHashMap<String, ReentrantLock> locksPorEstacao = new ConcurrentHashMap<>();
-
-    public ClimaTempoRealService(
-            EstacaoInmetRepository estacaoInmetRepository,
-            MedicaoClimaRepository medicaoClimaRepository,
-            IngestaoService ingestaoService) {
-        this.estacaoInmetRepository = estacaoInmetRepository;
-        this.medicaoClimaRepository = medicaoClimaRepository;
-        this.ingestaoService = ingestaoService;
-    }
+    private static final Logger log = LoggerFactory.getLogger(ClimaTempoRealService.class);
+    private static final Duration LIMITE_CACHE_EXPIRADO = Duration.ofHours(6);
 
     public record ClimaAtualResultado(
-            String estacaoCodigo,
             double chuvaMm,
             double ventoKmh,
             Double rajadaKmh,
@@ -57,118 +37,58 @@ public class ClimaTempoRealService {
             FonteDados fonteDados,
             Instant medidoEmUtc) {}
 
-    private record Contribuicao(MedicaoClima medicao, FonteDados fonte, double distanciaKm) {}
+    private final OpenMeteoClient openMeteoClient;
+    private final MetNorwayClient metNorwayClient;
+    private final Cache<String, CondicaoAtual> ultimaLeituraBoa =
+            Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(LIMITE_CACHE_EXPIRADO).build();
 
-    @Transactional
+    public ClimaTempoRealService(OpenMeteoClient openMeteoClient, MetNorwayClient metNorwayClient) {
+        this.openMeteoClient = openMeteoClient;
+        this.metNorwayClient = metNorwayClient;
+    }
+
+    /** Para testes: o cache e de singleton e atravessa testes que compartilham o contexto Spring. */
+    public void limparCache() {
+        ultimaLeituraBoa.invalidateAll();
+    }
+
     public Optional<ClimaAtualResultado> obterClimaAtual(Talhao talhao) {
-        List<EstacaoProximaProjecao> estacoesProximas =
-                estacaoInmetRepository.buscarMaisProximas(talhao.getGeometria().getCentroid(), LIMITE_ESTACOES_IDW);
-        if (estacoesProximas.isEmpty()) {
-            return Optional.empty();
+        Point centroide = talhao.getGeometria().getCentroid();
+        double lat = centroide.getY();
+        double lon = centroide.getX();
+        String chave = Math.round(lat * 100) / 100.0 + "|" + Math.round(lon * 100) / 100.0;
+
+        Optional<CondicaoAtual> fresca = buscarCondicao(lat, lon);
+        if (fresca.isPresent()) {
+            ultimaLeituraBoa.put(chave, fresca.get());
+            return Optional.of(paraResultado(fresca.get(), FonteDados.PREVISAO));
         }
-
-        List<Contribuicao> contribuicoes = new ArrayList<>();
-        for (EstacaoProximaProjecao estacaoProxima : estacoesProximas) {
-            obterLeituraFresca(estacaoProxima.getCodigo()).ifPresent(c ->
-                    contribuicoes.add(new Contribuicao(c.medicao(), c.fonte(), estacaoProxima.getDistanciaKm())));
-        }
-        if (contribuicoes.isEmpty()) {
-            return Optional.empty();
-        }
-
-        FonteDados fonteFinal = combinarFontes(contribuicoes);
-        Instant medidoEm = contribuicoes.stream()
-                .map(c -> c.medicao().getDataHoraUtc())
-                .min(Instant::compareTo)
-                .orElseThrow();
-
-        double chuva = interpolar(contribuicoes, c -> c.medicao().getPrecipitacaoMm());
-        double ventoMs = interpolar(contribuicoes, c -> c.medicao().getVentoVelocidadeMs());
-        Double rajadaMs = interpolarOuNull(contribuicoes, c -> c.medicao().getVentoRajadaMs());
-        Double temperatura = interpolarOuNull(contribuicoes, c -> c.medicao().getTemperaturaC());
-        Double umidade = interpolarOuNull(contribuicoes, c -> c.medicao().getUmidadePct());
-
-        String estacaoReferencia = estacoesProximas.get(0).getCodigo();
-        return Optional.of(new ClimaAtualResultado(
-                estacaoReferencia,
-                chuva,
-                PulverizacaoCalculos.converterMsParaKmh(ventoMs),
-                rajadaMs != null ? PulverizacaoCalculos.converterMsParaKmh(rajadaMs) : null,
-                temperatura,
-                umidade,
-                fonteFinal,
-                medidoEm));
+        return Optional.ofNullable(ultimaLeituraBoa.getIfPresent(chave))
+                .map(antiga -> paraResultado(antiga, FonteDados.CACHE_EXPIRADO));
     }
 
-    /** AO_VIVO so se todas as estacoes forem medicao real; leitura desatualizada pesa mais que previsao. */
-    private FonteDados combinarFontes(List<Contribuicao> contribuicoes) {
-        if (contribuicoes.stream().anyMatch(c -> c.fonte() == FonteDados.CACHE_EXPIRADO)) {
-            return FonteDados.CACHE_EXPIRADO;
-        }
-        if (contribuicoes.stream().anyMatch(c -> c.fonte() == FonteDados.PREVISAO)) {
-            return FonteDados.PREVISAO;
-        }
-        return FonteDados.AO_VIVO;
-    }
-
-    /** Leitura dentro do prazo mantem a procedencia gravada: fallback do Open-Meteo segue como PREVISAO. */
-    private FonteDados fonteDaLeituraFresca(MedicaoClima medicao) {
-        return medicao.getFonteDados() == FonteDados.PREVISAO ? FonteDados.PREVISAO : FonteDados.AO_VIVO;
-    }
-
-    private double interpolar(List<Contribuicao> contribuicoes, Function<Contribuicao, Double> extrator) {
-        Double resultado = interpolarOuNull(contribuicoes, extrator);
-        return resultado != null ? resultado : 0.0;
-    }
-
-    private Double interpolarOuNull(List<Contribuicao> contribuicoes, Function<Contribuicao, Double> extrator) {
-        List<IdwCalculos.ValorDistancia> valores = new ArrayList<>();
-        for (Contribuicao c : contribuicoes) {
-            Double valor = extrator.apply(c);
-            if (valor != null) {
-                valores.add(new IdwCalculos.ValorDistancia(valor, Math.max(c.distanciaKm(), 0.0001)));
-            }
-        }
-        return valores.isEmpty() ? null : IdwCalculos.interpolar(valores);
-    }
-
-    /** Double-checked locking: releitura apos adquirir o lock evita ingestao duplicada sob concorrencia. */
-    private Optional<Contribuicao> obterLeituraFresca(String codigoEstacao) {
-        Instant agora = Instant.now();
-        Optional<MedicaoClima> medicaoAtual = medicaoClimaRepository.findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(codigoEstacao);
-        if (medicaoAtual.isPresent() && !estaExpirada(medicaoAtual.get(), agora)) {
-            return Optional.of(new Contribuicao(medicaoAtual.get(), fonteDaLeituraFresca(medicaoAtual.get()), 0));
-        }
-
-        ReentrantLock lock = locksPorEstacao.computeIfAbsent(codigoEstacao, k -> new ReentrantLock());
-        lock.lock();
+    private Optional<CondicaoAtual> buscarCondicao(double lat, double lon) {
         try {
-            Optional<MedicaoClima> reChecagem =
-                    medicaoClimaRepository.findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(codigoEstacao);
-            if (reChecagem.isPresent() && !estaExpirada(reChecagem.get(), Instant.now())) {
-                return Optional.of(new Contribuicao(reChecagem.get(), fonteDaLeituraFresca(reChecagem.get()), 0));
-            }
-            EstacaoInmet estacao = estacaoInmetRepository.findById(codigoEstacao).orElse(null);
-            if (estacao == null) {
-                return Optional.empty();
-            }
-            ResultadoIngestao resultadoIngestao = ingestaoService.ingerirEstacao(estacao);
-            Optional<MedicaoClima> aposIngestao =
-                    medicaoClimaRepository.findFirstByEstacaoCodigoOrderByDataHoraUtcDesc(codigoEstacao);
-            if (aposIngestao.isEmpty()) {
-                return Optional.empty();
-            }
-            boolean fresco = resultadoIngestao != ResultadoIngestao.FALHA_TOTAL
-                    && !estaExpirada(aposIngestao.get(), Instant.now());
-            return Optional.of(new Contribuicao(
-                    aposIngestao.get(),
-                    fresco ? fonteDaLeituraFresca(aposIngestao.get()) : FonteDados.CACHE_EXPIRADO, 0));
-        } finally {
-            lock.unlock();
+            return Optional.of(openMeteoClient.obterCondicaoAtual(lat, lon));
+        } catch (FontePrevisaoIndisponivelException ex) {
+            log.warn("Open-Meteo indisponível para ({}, {}): {} -- tentando MET Norway.", lat, lon, ex.getMessage());
+        }
+        try {
+            return Optional.of(metNorwayClient.obterCondicaoAtual(lat, lon));
+        } catch (FontePrevisaoIndisponivelException ex) {
+            log.error("Open-Meteo e MET Norway indisponíveis para ({}, {}): {}", lat, lon, ex.getMessage());
+            return Optional.empty();
         }
     }
 
-    private boolean estaExpirada(MedicaoClima medicao, Instant agora) {
-        return Duration.between(medicao.getDataHoraUtc(), agora).compareTo(LIMITE_STALENESS) > 0;
+    private ClimaAtualResultado paraResultado(CondicaoAtual c, FonteDados fonte) {
+        return new ClimaAtualResultado(
+                c.precipitacaoMm() != null ? c.precipitacaoMm() : 0.0,
+                c.ventoKmh(),
+                c.rajadaKmh(),
+                c.temperaturaC(),
+                c.umidadePct(),
+                fonte,
+                c.obtidoEmUtc());
     }
 }

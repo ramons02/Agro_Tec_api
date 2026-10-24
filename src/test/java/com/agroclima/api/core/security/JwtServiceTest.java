@@ -13,7 +13,7 @@ class JwtServiceTest {
 
     private static JwtService servico(String segredo) {
         AppProperties props = new AppProperties(
-                new AppProperties.Jwt(segredo, "HS256", 24), null, null, null, null, null, null, null);
+                new AppProperties.Jwt(segredo, "HS256", 24), null, null, null, null, null);
         return new JwtService(props);
     }
 

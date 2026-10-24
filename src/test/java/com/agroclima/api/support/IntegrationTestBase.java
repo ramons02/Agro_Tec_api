@@ -48,7 +48,7 @@ public abstract class IntegrationTestBase {
     void limparTudo() {
         jdbcTemplate.execute(
                 "TRUNCATE TABLE tokens_recuperacao_senha, vinculos_agronomo_propriedade, "
-                        + "balanco_hidrico_diario, medicoes_clima, talhoes, propriedades, "
-                        + "estacoes_inmet, cultura_kc, usuarios CASCADE");
+                        + "balanco_hidrico_diario, talhoes, propriedades, "
+                        + "cultura_kc, usuarios CASCADE");
     }
 }

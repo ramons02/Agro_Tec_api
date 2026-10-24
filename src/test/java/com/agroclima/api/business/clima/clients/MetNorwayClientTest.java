@@ -52,11 +52,12 @@ class MetNorwayClientTest {
                 ",\"next_1_hours\":{\"details\":{\"precipitation_amount\":1.2}}"));
         MetNorwayClient cliente = new MetNorwayClient(MOCK.baseUrl(), "AgroTeste/1.0 (teste@exemplo.com)");
 
-        MetNorwayClient.CondicaoAtual c = cliente.obterCondicaoAtual(-1.4512, -48.4987);
+        CondicaoAtual c = cliente.obterCondicaoAtual(-1.4512, -48.4987);
 
         assertEquals(29.7, c.temperaturaC());
         assertEquals(70.8, c.umidadePct());
-        assertEquals(5.8, c.ventoMs());
+        assertEquals(20.88, c.ventoKmh(), 0.001);
+        assertNull(c.rajadaKmh());
         assertEquals(1.2, c.precipitacaoMm());
         MOCK.verify(getRequestedFor(urlPathEqualTo(CAMINHO))
                 .withHeader("User-Agent", equalTo("AgroTeste/1.0 (teste@exemplo.com)"))
