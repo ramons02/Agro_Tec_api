@@ -86,6 +86,11 @@ public class GrupoService {
 
     public record AdminResumo(UUID id, String nome, String email) {}
 
+    /** Dados de quem esta logado, para o menu do avatar. Sem hash de senha, sem motivo de suspensao. */
+    public record Perfil(
+            UUID id, String nome, String email, Papel papel, String status, Instant criadoEm,
+            List<String> grupos, boolean acessoTotal) {}
+
     public record ItemGrupo(UUID id, String nome, AdminResumo admin, long usuarios, Instant criadoEm) {}
 
     /** Resposta de POST /grupos: a senha temporaria do Admin aparece so aqui, uma unica vez. */
@@ -96,6 +101,24 @@ public class GrupoService {
 
     /** Resposta de POST /grupos/{id}/novo-link: o link aparece so aqui; depois so existe o hash. */
     public record NovoLink(String link, Instant geradoEm) {}
+
+    /** Perfil de quem esta logado: o produtor e o Admin tem um grupo; o agronomo, um ou mais; o Master ve todos. */
+    @Transactional(readOnly = true)
+    public Perfil perfilDe(UsuarioAutenticado solicitante) {
+        Usuario usuario = usuarioRepository.findById(solicitante.id())
+                .orElseThrow(() -> new AppException(404, "Usuário não encontrado."));
+        List<UUID> idsGrupos;
+        if (usuario.getPapel() == Papel.AGRONOMO) {
+            idsGrupos = participacaoRepository.findByIdAgronomoId(usuario.getId()).stream()
+                    .map(ParticipacaoAgronomo::getGrupoId).toList();
+        } else {
+            idsGrupos = usuario.getGrupoId() == null ? List.of() : List.of(usuario.getGrupoId());
+        }
+        List<String> nomes = grupoRepository.findAllById(idsGrupos).stream().map(Grupo::getNome).sorted().toList();
+        return new Perfil(usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPapel(),
+                usuario.getStatus().name(), usuario.getCriadoEm(), nomes,
+                autorizacaoService.ehMaster(solicitante));
+    }
 
     /** Master: todos os grupos; Admin: o dele. */
     @Transactional(readOnly = true)
