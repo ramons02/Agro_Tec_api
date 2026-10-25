@@ -45,6 +45,9 @@ public class OpenMeteoClient {
     // Dia ja ocorrido nao muda: cache longo.
     private final Cache<String, DadosDiarios> cacheDiarios =
             Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofHours(6)).build();
+    // Umidade do solo e horaria no modelo: 30 min de cache bastam.
+    private final Cache<String, UmidadeSoloAtual> cacheSolo =
+            Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(TTL_CACHE).build();
     private final AtomicLong contadorChamadasReais = new AtomicLong();
 
     public OpenMeteoClient(AppProperties appProperties) {
@@ -67,6 +70,7 @@ public class OpenMeteoClient {
         cache10Dias.invalidateAll();
         cacheAtual.invalidateAll();
         cacheDiarios.invalidateAll();
+        cacheSolo.invalidateAll();
     }
 
     public long contadorChamadasReais() {
@@ -88,6 +92,20 @@ public class OpenMeteoClient {
         CondicaoAtual condicao = parsearAtual(resposta);
         cacheAtual.put(chave, condicao);
         return condicao;
+    }
+
+    /** Umidade do solo (0-7 cm e 7-28 cm) na hora atual, a partir do campo horario do provedor. */
+    public UmidadeSoloAtual obterUmidadeSolo(double lat, double lon) {
+        String chave = chaveSemHora(lat, lon);
+        UmidadeSoloAtual emCache = cacheSolo.getIfPresent(chave);
+        if (emCache != null) {
+            return emCache;
+        }
+        JsonNode resposta = chamarComRetryEm429(() -> executarChamadaSolo(lat, lon));
+        contadorChamadasReais.incrementAndGet();
+        UmidadeSoloAtual umidade = parsearSolo(resposta);
+        cacheSolo.put(chave, umidade);
+        return umidade;
     }
 
     /** Chuva e ET0 de um dia ja ocorrido (ate 3 dias atras), pelo campo "daily" com past_days. */
@@ -146,6 +164,49 @@ public class OpenMeteoClient {
                         .build())
                 .retrieve()
                 .body(JsonNode.class);
+    }
+
+    private JsonNode executarChamadaSolo(double lat, double lon) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/v1/forecast")
+                        .queryParam("latitude", lat)
+                        .queryParam("longitude", lon)
+                        .queryParam("hourly", "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm")
+                        .queryParam("forecast_days", 1)
+                        .queryParam("timezone", "UTC")
+                        .build())
+                .retrieve()
+                .body(JsonNode.class);
+    }
+
+    /** Pega a hora cheia mais recente que ja passou (os valores horarios comecam em 00:00 UTC do dia). */
+    private UmidadeSoloAtual parsearSolo(JsonNode resposta) {
+        JsonNode hourly = resposta == null ? null : resposta.path("hourly");
+        JsonNode horas = hourly == null ? null : hourly.path("time");
+        if (horas == null || !horas.isArray() || horas.isEmpty()) {
+            throw new FontePrevisaoIndisponivelException("Open-Meteo devolveu resposta sem a umidade do solo.", null);
+        }
+        Instant agora = Instant.now();
+        int indice = 0;
+        for (int i = 0; i < horas.size(); i++) {
+            try {
+                if (!LocalDateTime.parse(horas.get(i).asText()).toInstant(ZoneOffset.UTC).isAfter(agora)) {
+                    indice = i;
+                }
+            } catch (java.time.format.DateTimeParseException ignorada) {
+                // hora ilegivel: segue com a anterior
+            }
+        }
+        Instant referencia = agora;
+        try {
+            referencia = LocalDateTime.parse(horas.get(indice).asText()).toInstant(ZoneOffset.UTC);
+        } catch (java.time.format.DateTimeParseException ignorada) {
+            // mantem "agora": o horario e so informativo
+        }
+        return new UmidadeSoloAtual(
+                valorNoIndice(hourly, "soil_moisture_0_to_7cm", indice),
+                valorNoIndice(hourly, "soil_moisture_7_to_28cm", indice),
+                referencia);
     }
 
     private JsonNode executarChamadaDiaria(double lat, double lon) {

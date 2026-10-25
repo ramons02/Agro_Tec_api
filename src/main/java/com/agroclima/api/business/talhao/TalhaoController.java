@@ -2,8 +2,12 @@ package com.agroclima.api.business.talhao;
 
 import com.agroclima.api.business.balancohidrico.BalancoHidricoDiario;
 import com.agroclima.api.business.balancohidrico.BalancoHidricoDiarioRepository;
+import com.agroclima.api.business.clima.clients.FontePrevisaoIndisponivelException;
+import com.agroclima.api.business.clima.clients.OpenMeteoClient;
+import com.agroclima.api.business.clima.clients.UmidadeSoloAtual;
 import com.agroclima.api.core.calculos.ClassificacaoPulverizacao;
 import com.agroclima.api.core.calculos.RecomendacaoCalculos;
+import com.agroclima.api.core.calculos.SoloCalculos;
 import com.agroclima.api.core.calculos.StatusPlantio;
 import com.agroclima.api.core.calculos.TendenciaUmidade;
 import com.agroclima.api.core.geo.GeoJsonUtil;
@@ -35,6 +39,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,14 +60,17 @@ public class TalhaoController {
     private final TalhaoService talhaoService;
     private final PulverizacaoService pulverizacaoService;
     private final BalancoHidricoDiarioRepository balancoHidricoDiarioRepository;
+    private final OpenMeteoClient openMeteoClient;
 
     public TalhaoController(
             TalhaoService talhaoService,
             PulverizacaoService pulverizacaoService,
-            BalancoHidricoDiarioRepository balancoHidricoDiarioRepository) {
+            BalancoHidricoDiarioRepository balancoHidricoDiarioRepository,
+            OpenMeteoClient openMeteoClient) {
         this.talhaoService = talhaoService;
         this.pulverizacaoService = pulverizacaoService;
         this.balancoHidricoDiarioRepository = balancoHidricoDiarioRepository;
+        this.openMeteoClient = openMeteoClient;
     }
 
     public record TalhaoRequest(
@@ -148,6 +156,57 @@ public class TalhaoController {
     public ApiEnvelope<Map<String, Object>> buscar(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
         return ApiEnvelope.sucesso(paraDados(talhaoService.buscarVisivelOu404(usuario, id)));
+    }
+
+    /**
+     * Solo do talhao com dado real: textura e CAD do SoilGrids (gravados no talhao) e umidade do solo do
+     * modelo do Open-Meteo na hora atual. Nunca devolve numero inventado: o que faltar vem nulo, e
+     * {@code solo_pendente} avisa que o SoilGrids ainda nao respondeu (ver TalhaoSoloService).
+     */
+    @GetMapping("/{id}/solo")
+    public ApiEnvelope<Map<String, Object>> solo(
+            @AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
+        Talhao talhao = talhaoService.buscarVisivelOu404(usuario, id);
+
+        Map<String, Object> dados = new HashMap<>();
+        dados.put("tipo_solo", talhao.getTipoSolo());
+        dados.put("argila_pct", talhao.getFracaoArgilaPct());
+        dados.put("areia_pct", talhao.getFracaoAreiaPct());
+        dados.put("silte_pct", talhao.getFracaoSiltePct());
+        dados.put("materia_organica_pct", talhao.getMateriaOrganicaPct());
+        dados.put("capacidade_agua_disponivel_mm", talhao.getCapacidadeAguaDisponivelMm());
+        dados.put("solo_pendente", talhao.getTipoSolo() == null);
+
+        Double capacidadeCampoPct = null;
+        if (talhao.getFracaoArgilaPct() != null && talhao.getFracaoAreiaPct() != null
+                && talhao.getMateriaOrganicaPct() != null) {
+            capacidadeCampoPct = SoloCalculos.estimarCcPmp(
+                    talhao.getFracaoArgilaPct(), talhao.getFracaoAreiaPct(),
+                    talhao.getMateriaOrganicaPct()).ccPct();
+        }
+        dados.put("capacidade_campo_pct", capacidadeCampoPct);
+
+        Double umidade07 = null;
+        Double umidade728 = null;
+        Instant referencia = null;
+        try {
+            var centroide = talhao.getGeometria().getCentroid();
+            UmidadeSoloAtual umidade = openMeteoClient.obterUmidadeSolo(centroide.getY(), centroide.getX());
+            umidade07 = emPorcento(umidade.camada0a7cm());
+            umidade728 = emPorcento(umidade.camada7a28cm());
+            referencia = umidade.referenciaUtc();
+        } catch (FontePrevisaoIndisponivelException ex) {
+            // Sem a umidade o resto do solo continua valendo; a tela mostra "sem dado".
+        }
+        dados.put("umidade_0_7cm_pct", umidade07);
+        dados.put("umidade_7_28cm_pct", umidade728);
+        dados.put("umidade_referencia_utc", referencia == null ? null : referencia.toString());
+        dados.put("fonte_umidade", "OPEN_METEO");
+        return ApiEnvelope.sucesso(dados);
+    }
+
+    private static Double emPorcento(Double fracao) {
+        return fracao == null ? null : Math.round(fracao * 1000.0) / 10.0;
     }
 
     @GetMapping("/{id}/pulverizacao")

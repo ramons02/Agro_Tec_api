@@ -45,6 +45,7 @@ class IsolamentoDadosIT extends IsolamentoBase {
         List<String> rotas = List.of(
                 "/api/v1/propriedades/" + propriedadeB.getId(),
                 "/api/v1/talhoes/" + talhaoB.getId(),
+                "/api/v1/talhoes/" + talhaoB.getId() + "/solo",
                 "/api/v1/talhoes/" + talhaoB.getId() + "/pulverizacao",
                 "/api/v1/talhoes/" + talhaoB.getId() + "/recomendacao",
                 "/api/v1/talhoes/" + talhaoB.getId() + "/balanco-hidrico",
