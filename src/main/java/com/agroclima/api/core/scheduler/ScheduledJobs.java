@@ -2,6 +2,7 @@ package com.agroclima.api.core.scheduler;
 
 import com.agroclima.api.business.balancohidrico.BalancoHidricoService;
 import com.agroclima.api.business.telegram.AlertaPulverizacaoService;
+import com.agroclima.api.core.security.ArmazemJdbc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -21,12 +22,21 @@ public class ScheduledJobs {
 
     private final BalancoHidricoService balancoHidricoService;
     private final AlertaPulverizacaoService alertaPulverizacaoService;
+    private final ArmazemJdbc limitesDeTentativas;
 
     public ScheduledJobs(
             BalancoHidricoService balancoHidricoService,
-            AlertaPulverizacaoService alertaPulverizacaoService) {
+            AlertaPulverizacaoService alertaPulverizacaoService,
+            ArmazemJdbc limitesDeTentativas) {
         this.balancoHidricoService = balancoHidricoService;
         this.alertaPulverizacaoService = alertaPulverizacaoService;
+        this.limitesDeTentativas = limitesDeTentativas;
+    }
+
+    /** Diario -- apaga as linhas vencidas de limite_tentativas (login, senha e cadastro). */
+    @Scheduled(cron = "0 30 3 * * *")
+    public void limparLimitesVencidos() {
+        log.info("Limites de tentativas vencidos apagados: {}.", limitesDeTentativas.removerVencidos());
     }
 
     @EventListener(ApplicationReadyEvent.class)

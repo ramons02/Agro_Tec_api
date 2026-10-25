@@ -37,7 +37,8 @@ class AuthServiceConviteTest {
                 new BCryptPasswordEncoder(), mock(JwtService.class), mock(EmailService.class), props,
                 mock(com.agroclima.api.core.security.EstadoContaCache.class), java.time.Clock.systemUTC(),
                 mock(com.agroclima.api.business.usuario.AuditoriaContaRepository.class),
-                mock(com.agroclima.api.business.grupo.ParticipacaoAgronomoRepository.class));
+                mock(com.agroclima.api.business.grupo.ParticipacaoAgronomoRepository.class),
+                new com.agroclima.api.core.security.ArmazemEmMemoria());
         when(usuarios.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
     }
 

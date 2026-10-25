@@ -9,6 +9,7 @@ import com.agroclima.api.core.config.AppProperties;
 import com.agroclima.api.core.response.AppException;
 import com.agroclima.api.core.security.EstadoContaCache;
 import com.agroclima.api.core.security.JwtService;
+import com.agroclima.api.core.security.ArmazemDeContagem;
 import com.agroclima.api.core.security.LimitadorTentativas;
 import com.agroclima.api.core.security.UsuarioAutenticado;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,10 +45,10 @@ public class AuthService {
     static final int SENHA_MINIMA = 8;
     private final SecureRandom secureRandom = new SecureRandom();
     // 5 logins errados por e-mail bloqueiam por 15 min; 3 pedidos de recuperacao por e-mail por hora.
-    private final LimitadorTentativas limiteLogin = new LimitadorTentativas(5, Duration.ofMinutes(15));
-    private final LimitadorTentativas limiteRecuperacao = new LimitadorTentativas(3, Duration.ofHours(1));
+    private final LimitadorTentativas limiteLogin;
+    private final LimitadorTentativas limiteRecuperacao;
     // 5 senhas atuais erradas por conta em 15 min: quem roubou um token nao descobre a senha por tentativa e erro.
-    private final LimitadorTentativas limiteTrocaSenha = new LimitadorTentativas(5, Duration.ofMinutes(15));
+    private final LimitadorTentativas limiteTrocaSenha;
 
     public AuthService(
             UsuarioRepository usuarioRepository,
@@ -60,7 +61,11 @@ public class AuthService {
             EstadoContaCache estadoContaCache,
             Clock clock,
             AuditoriaContaRepository auditoriaRepository,
-            ParticipacaoAgronomoRepository participacaoRepository) {
+            ParticipacaoAgronomoRepository participacaoRepository,
+            ArmazemDeContagem armazemDeContagem) {
+        this.limiteLogin = new LimitadorTentativas("login", 5, Duration.ofMinutes(15), armazemDeContagem);
+        this.limiteRecuperacao = new LimitadorTentativas("recuperacao", 3, Duration.ofHours(1), armazemDeContagem);
+        this.limiteTrocaSenha = new LimitadorTentativas("troca-senha", 5, Duration.ofMinutes(15), armazemDeContagem);
         this.participacaoRepository = participacaoRepository;
         this.usuarioRepository = usuarioRepository;
         this.tokenRepository = tokenRepository;

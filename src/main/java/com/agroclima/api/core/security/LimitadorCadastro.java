@@ -7,18 +7,20 @@ import java.time.Duration;
 
 /**
  * Limite de cadastros por hora, por origem (IP do cliente), do cadastro publico (spec 022, FR-003/R5).
- * Em memoria, como o {@link LimitadorTentativas}: a API roda numa instancia so. O pior caso de um
- * limite contornado e uma fila de pendentes maior, ninguem ganha acesso sem aprovacao do gestor.
+ * Guardado no banco, como o {@link LimitadorTentativas}. O pior caso de um limite contornado e uma fila
+ * de pendentes maior: ninguem ganha acesso sem aprovacao do gestor.
  */
 @Component
 public class LimitadorCadastro {
 
-    private final int maximoPorHora;
-    private LimitadorTentativas limitador;
+    private static final String ESCOPO = "cadastro";
 
-    public LimitadorCadastro(@Value("${app.cadastro.limite-por-hora:3}") int maximoPorHora) {
-        this.maximoPorHora = maximoPorHora;
-        this.limitador = novo();
+    private final LimitadorTentativas limitador;
+    private final ArmazemDeContagem armazem;
+
+    public LimitadorCadastro(@Value("${app.cadastro.limite-por-hora:3}") int maximoPorHora, ArmazemJdbc armazem) {
+        this.armazem = armazem;
+        this.limitador = new LimitadorTentativas(ESCOPO, maximoPorHora, Duration.ofHours(1), armazem);
     }
 
     /** Conta uma tentativa da origem e diz se ainda cabe no limite. */
@@ -27,11 +29,7 @@ public class LimitadorCadastro {
     }
 
     /** Zera os contadores (usado pelos testes, que cadastram varias vezes pelo mesmo IP). */
-    public synchronized void reiniciar() {
-        this.limitador = novo();
-    }
-
-    private LimitadorTentativas novo() {
-        return new LimitadorTentativas(maximoPorHora, Duration.ofHours(1));
+    public void reiniciar() {
+        armazem.removerEscopo(ESCOPO);
     }
 }
