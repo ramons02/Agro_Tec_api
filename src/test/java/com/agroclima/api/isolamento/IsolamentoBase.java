@@ -105,6 +105,7 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "GET /api/v1/push/chave",
             "POST /api/v1/push/assinaturas",
             "POST /api/v1/push/assinaturas/remover",
+            "POST /api/v1/push/testar",
             "POST /api/v1/telegram/vincular-link",
             "POST /api/v1/telegram/webhook",
             "DELETE /api/v1/telegram/vinculo",
