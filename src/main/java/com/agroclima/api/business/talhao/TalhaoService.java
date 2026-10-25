@@ -1,10 +1,6 @@
 package com.agroclima.api.business.talhao;
 
-import com.agroclima.api.business.clima.clients.FonteSoloIndisponivelException;
-import com.agroclima.api.business.clima.clients.PerfilSolo;
-import com.agroclima.api.business.clima.clients.SoilGridsClient;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
-import com.agroclima.api.core.calculos.SoloCalculos;
 import com.agroclima.api.core.geo.GeometriaUtil;
 import com.agroclima.api.core.geo.ValidacaoGeometria;
 import com.agroclima.api.core.response.AppException;
@@ -12,9 +8,9 @@ import com.agroclima.api.core.security.AutorizacaoService;
 import com.agroclima.api.core.security.UsuarioAutenticado;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.MultiPolygon;
-import org.locationtech.jts.geom.Point;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,7 +26,8 @@ import java.util.UUID;
  * Espelha _criar_talhao_a_partir_de_poligono() de app/api/v1/endpoints/talhoes.py -- a
  * logica de porte mais arriscada: 3 semanticas de erro distintas (422 geometria/fora do
  * Para, 409 sobreposicao mesma propriedade bloqueia, aviso sobreposicao outra propriedade
- * nao bloqueia) e SoilGrids nunca bloqueia a criacao se falhar.
+ * nao bloqueia) e o solo (SoilGrids) nunca bloqueia a criacao: e buscado em segundo plano
+ * por {@link TalhaoSoloService}, porque o servico leva de 30 s a mais de 1 min para responder.
  */
 @Service
 public class TalhaoService {
@@ -41,19 +38,19 @@ public class TalhaoService {
     private final PropriedadeRepository propriedadeRepository;
     private final AutorizacaoService autorizacaoService;
     private final ImportacaoGeoService importacaoGeoService;
-    private final SoilGridsClient soilGridsClient;
+    private final ApplicationEventPublisher eventos;
 
     public TalhaoService(
             TalhaoRepository talhaoRepository,
             PropriedadeRepository propriedadeRepository,
             AutorizacaoService autorizacaoService,
             ImportacaoGeoService importacaoGeoService,
-            SoilGridsClient soilGridsClient) {
+            ApplicationEventPublisher eventos) {
         this.talhaoRepository = talhaoRepository;
         this.propriedadeRepository = propriedadeRepository;
         this.autorizacaoService = autorizacaoService;
         this.importacaoGeoService = importacaoGeoService;
-        this.soilGridsClient = soilGridsClient;
+        this.eventos = eventos;
     }
 
     static final String MENSAGEM_FORA_DO_PARA =
@@ -76,8 +73,6 @@ public class TalhaoService {
             throw new AppException(422, MENSAGEM_FORA_DO_PARA,
                     Map.of("tipo", "FORA_DO_PARA", "requer_confirmacao", false));
         }
-        Point centroide = geometriaBruta.getCentroid();
-
         MultiPolygon geometria = GeometriaUtil.normalizarParaMultiPolygon(geometriaBruta);
 
         List<String> sobreposicaoMesma = talhaoRepository.buscarSobreposicaoMesmaPropriedade(propriedadeId, geometria);
@@ -96,8 +91,8 @@ public class TalhaoService {
 
         double areaHa = talhaoRepository.calcularAreaHa(geometria);
         Talhao talhao = new Talhao(propriedadeId, nome, geometria, areaHa);
-        parametrizarSoloSemBloquear(talhao, centroide);
         talhaoRepository.save(talhao);
+        eventos.publishEvent(new TalhaoPrecisaDeSolo(talhao.getId()));
 
         return new ResultadoCriacao(talhao, aviso);
     }
@@ -119,7 +114,6 @@ public class TalhaoService {
             throw new AppException(422, MENSAGEM_FORA_DO_PARA,
                     Map.of("tipo", "FORA_DO_PARA", "requer_confirmacao", false));
         }
-        Point centroide = geometriaBruta.getCentroid();
         MultiPolygon geometria = GeometriaUtil.normalizarParaMultiPolygon(geometriaBruta);
 
         List<String> sobreposicaoMesma = talhaoRepository
@@ -139,8 +133,9 @@ public class TalhaoService {
         }
 
         talhao.redefinirGeometria(nome, geometria, talhaoRepository.calcularAreaHa(geometria));
-        parametrizarSoloSemBloquear(talhao, centroide);
+        talhao.limparSolo();
         talhaoRepository.save(talhao);
+        eventos.publishEvent(new TalhaoPrecisaDeSolo(talhao.getId()));
         return new ResultadoCriacao(talhao, aviso);
     }
 
@@ -166,27 +161,6 @@ public class TalhaoService {
         }
         boolean dentro = ValidacaoGeometria.estaDentroDoPara(geometria);
         return new GeometriaLida(geometria, dentro, dentro ? null : MENSAGEM_FORA_DO_PARA);
-    }
-
-    /** SoilGrids nunca bloqueia a criacao do talhao -- nem em erro, nem em "sem cobertura" (RN017). */
-    private void parametrizarSoloSemBloquear(Talhao talhao, Point centroide) {
-        try {
-            Optional<PerfilSolo> perfilOpcional = soilGridsClient.parametrizarSolo(centroide.getY(), centroide.getX());
-            if (perfilOpcional.isEmpty()) {
-                log.warn("SoilGrids sem cobertura para o talhão em ({}, {})", centroide.getY(), centroide.getX());
-                return;
-            }
-            PerfilSolo perfil = perfilOpcional.get();
-            var tipoSolo = SoloCalculos.classificarTextura(
-                    perfil.fracaoArgilaPct(), perfil.fracaoAreiaPct(), perfil.fracaoSiltePct());
-            var ccPmp = SoloCalculos.estimarCcPmp(
-                    perfil.fracaoArgilaPct(), perfil.fracaoAreiaPct(), perfil.materiaOrganicaPct());
-            double cad = SoloCalculos.calcularCad(ccPmp.ccPct(), ccPmp.pmpPct(), perfil.densidadeSoloGCm3());
-            talhao.parametrizarSolo(tipoSolo, perfil.fracaoArgilaPct(), perfil.fracaoAreiaPct(),
-                    perfil.fracaoSiltePct(), perfil.materiaOrganicaPct(), cad);
-        } catch (FonteSoloIndisponivelException ex) {
-            log.warn("SoilGrids indisponível ao criar talhão: {}", ex.getMessage());
-        }
     }
 
     @Transactional(readOnly = true)

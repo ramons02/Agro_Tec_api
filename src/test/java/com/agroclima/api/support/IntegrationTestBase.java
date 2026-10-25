@@ -37,6 +37,8 @@ public abstract class IntegrationTestBase {
         registry.add("spring.flyway.schemas", () -> "java_test");
         registry.add("spring.flyway.default-schema", () -> "java_test");
         registry.add("spring.flyway.clean-disabled", () -> "false");
+        // Sem SoilGrids de verdade nos testes: o solo em segundo plano so roda nos testes que o ligam.
+        registry.add("agroclima.solo.segundo-plano", () -> "false");
         registry.add("app.jwt.secret", () -> "segredo-somente-para-testes-de-integracao-0123456789");
     }
 
