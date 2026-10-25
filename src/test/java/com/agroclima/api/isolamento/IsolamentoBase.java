@@ -52,6 +52,7 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "GET /api/v1/talhoes/{id}",
             "PUT /api/v1/talhoes/{id}",
             "DELETE /api/v1/talhoes/{id}",
+            "GET /api/v1/talhoes/{id}/solo",
             "GET /api/v1/talhoes/{id}/pulverizacao",
             "GET /api/v1/talhoes/{id}/recomendacao",
             "GET /api/v1/talhoes/{id}/balanco-hidrico",
