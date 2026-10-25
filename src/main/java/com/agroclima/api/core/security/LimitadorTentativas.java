@@ -1,47 +1,43 @@
 package com.agroclima.api.core.security;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-
 import java.time.Duration;
-import java.util.Locale;
 
 /**
- * Limite de tentativas por chave (e-mail), em memoria -- a API roda numa instancia so (Render free),
- * entao nao precisa de Redis. A janela e deslizante: cada nova tentativa renova o prazo da chave,
- * entao o bloqueio dura {@code janela} a partir da ultima tentativa. Chave por e-mail e nao por IP
- * de proposito: atras do proxy do Render o IP real nao e confiavel.
+ * Limite de tentativas por chave (e-mail ou IP) dentro de um escopo (login, recuperacao, cadastro...).
+ * A janela e deslizante: cada nova tentativa renova o prazo da chave, entao o bloqueio dura {@code janela}
+ * a partir da ultima tentativa. As contagens ficam num {@link ArmazemDeContagem}: no banco em producao,
+ * para sobreviver a reinicio e valer com mais de uma instancia. Chave por e-mail e nao por IP no login,
+ * de proposito: o IP real atras do proxy do Render nao e confiavel.
  */
 public class LimitadorTentativas {
 
+    private final String escopo;
     private final int maximo;
-    private final Cache<String, Integer> contadores;
+    private final Duration janela;
+    private final ArmazemDeContagem armazem;
 
-    public LimitadorTentativas(int maximo, Duration janela) {
+    public LimitadorTentativas(String escopo, int maximo, Duration janela, ArmazemDeContagem armazem) {
+        this.escopo = escopo;
         this.maximo = maximo;
-        this.contadores = Caffeine.newBuilder().maximumSize(50_000).expireAfterWrite(janela).build();
+        this.janela = janela;
+        this.armazem = armazem;
     }
 
     /** Ja atingiu o maximo de tentativas dentro da janela? Nao altera o contador. */
     public boolean bloqueado(String chave) {
-        Integer usadas = contadores.getIfPresent(normalizar(chave));
-        return usadas != null && usadas >= maximo;
+        return armazem.atual(escopo, chave) >= maximo;
     }
 
     public void registrarFalha(String chave) {
-        contadores.asMap().merge(normalizar(chave), 1, Integer::sum);
+        armazem.incrementar(escopo, chave, janela);
     }
 
     public void limpar(String chave) {
-        contadores.invalidate(normalizar(chave));
+        armazem.remover(escopo, chave);
     }
 
     /** Conta uma tentativa e diz se ela ainda cabe no limite. */
     public boolean consumir(String chave) {
-        return contadores.asMap().merge(normalizar(chave), 1, Integer::sum) <= maximo;
-    }
-
-    private static String normalizar(String chave) {
-        return chave == null ? "" : chave.trim().toLowerCase(Locale.ROOT);
+        return armazem.incrementar(escopo, chave, janela) <= maximo;
     }
 }
