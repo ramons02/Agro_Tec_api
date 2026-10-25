@@ -91,6 +91,8 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "POST /api/v1/auth/recuperar-senha",
             "POST /api/v1/auth/redefinir-senha",
             "GET /api/v1/previsao",
+            // So interpreta o arquivo enviado e devolve o poligono: nao le nem grava dado de nenhum grupo.
+            "POST /api/v1/talhoes/geometria-de-arquivo",
             "POST /api/v1/telegram/vincular-link",
             "POST /api/v1/telegram/webhook",
             "DELETE /api/v1/telegram/vinculo",

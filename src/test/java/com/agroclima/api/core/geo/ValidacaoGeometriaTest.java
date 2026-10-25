@@ -24,23 +24,38 @@ class ValidacaoGeometriaTest {
     }
 
     @Test
-    void centroideDentroDoParaEAceito() {
-        // Belem aproximado
-        Point ponto = factory.createPoint(new Coordinate(-48.5, -1.45));
-        assertThat(ValidacaoGeometria.estaDentroDoPara(ponto)).isTrue();
+    void cidadesDoParaEstaoDentro() {
+        // Belem, Maraba, Santarem e Altamira.
+        for (double[] c : new double[][] {{-48.5, -1.45}, {-49.13, -5.38}, {-54.70, -2.44}, {-52.21, -3.20}}) {
+            assertThat(ValidacaoGeometria.estaDentroDoPara(factory.createPoint(new Coordinate(c[0], c[1]))))
+                    .as("ponto %s,%s", c[0], c[1]).isTrue();
+        }
     }
 
     @Test
-    void centroideForaDoParaENegado() {
-        // Sao Paulo, bem fora da bbox do Para
-        Point ponto = factory.createPoint(new Coordinate(-46.6, -23.5));
-        assertThat(ValidacaoGeometria.estaDentroDoPara(ponto)).isFalse();
+    void cidadesDeOutrosEstadosEstaoFora() {
+        // Sao Paulo, Macapa (AP), Manaus (AM), Imperatriz (MA), Araguaina (TO), Boa Vista (RR), Cuiaba (MT).
+        // Imperatriz e Araguaina cabiam na antiga caixa retangular do Para; pelo limite oficial nao cabem.
+        double[][] fora = {{-46.6, -23.5}, {-51.07, 0.03}, {-60.02, -3.12}, {-47.48, -5.52},
+                {-48.20, -7.19}, {-60.67, 2.82}, {-56.10, -15.60}};
+        for (double[] c : fora) {
+            assertThat(ValidacaoGeometria.estaDentroDoPara(factory.createPoint(new Coordinate(c[0], c[1]))))
+                    .as("ponto %s,%s", c[0], c[1]).isFalse();
+        }
     }
 
     @Test
-    void limitesDaBboxSaoInclusivos() {
-        Point canto = factory.createPoint(new Coordinate(ValidacaoGeometria.PARA_LON_MIN, ValidacaoGeometria.PARA_LAT_MIN));
-        assertThat(ValidacaoGeometria.estaDentroDoPara(canto)).isTrue();
+    void talhaoQueAtravessaADivisaNaoEAceito() {
+        // De Belem ate Macapa: comeca no Para e termina no Amapa.
+        Polygon atravessa = factory.createPolygon(new Coordinate[] {
+            new Coordinate(-48.6, -1.5), new Coordinate(-51.0, -1.5), new Coordinate(-51.0, 0.1),
+            new Coordinate(-48.6, 0.1), new Coordinate(-48.6, -1.5)});
+        assertThat(ValidacaoGeometria.estaDentroDoPara(atravessa)).isFalse();
+    }
+
+    @Test
+    void talhaoPequenoNoInteriorDoParaEAceito() {
+        assertThat(ValidacaoGeometria.estaDentroDoPara(quadrado(-48.50, -1.45, 0.01))).isTrue();
     }
 
     @Test

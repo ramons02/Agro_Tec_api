@@ -56,11 +56,14 @@ public class TalhaoService {
         this.soilGridsClient = soilGridsClient;
     }
 
+    static final String MENSAGEM_FORA_DO_PARA =
+            "O talhão precisa estar inteiramente dentro do estado do Pará. Este arquivo está fora do estado.";
+
     public record ResultadoCriacao(Talhao talhao, String aviso) {}
 
     @Transactional
     public ResultadoCriacao criarDeGeometria(
-            UsuarioAutenticado usuario, UUID propriedadeId, String nome, Geometry geometriaBruta, boolean confirmarForaDoPara) {
+            UsuarioAutenticado usuario, UUID propriedadeId, String nome, Geometry geometriaBruta) {
         autorizacaoService.verificarDonoOuGestor(usuario, propriedadeId);
         propriedadeRepository.findById(propriedadeId)
                 .orElseThrow(() -> new AppException(404, "Propriedade não encontrada."));
@@ -69,11 +72,11 @@ public class TalhaoService {
             throw new AppException(422, "Geometria inválida.");
         }
 
-        Point centroide = geometriaBruta.getCentroid();
-        if (!ValidacaoGeometria.estaDentroDoPara(centroide) && !confirmarForaDoPara) {
-            throw new AppException(422, "Talhão fora da área esperada do Pará. Confirme para prosseguir.",
-                    Map.of("tipo", "FORA_DO_PARA", "requer_confirmacao", true));
+        if (!ValidacaoGeometria.estaDentroDoPara(geometriaBruta)) {
+            throw new AppException(422, MENSAGEM_FORA_DO_PARA,
+                    Map.of("tipo", "FORA_DO_PARA", "requer_confirmacao", false));
         }
+        Point centroide = geometriaBruta.getCentroid();
 
         MultiPolygon geometria = GeometriaUtil.normalizarParaMultiPolygon(geometriaBruta);
 
@@ -101,10 +104,26 @@ public class TalhaoService {
 
     @Transactional
     public ResultadoCriacao criarDeArquivo(
-            UsuarioAutenticado usuario, UUID propriedadeId, String nome, String nomeArquivo, byte[] conteudo,
-            boolean confirmarForaDoPara) {
+            UsuarioAutenticado usuario, UUID propriedadeId, String nome, String nomeArquivo, byte[] conteudo) {
         Geometry geometria = importacaoGeoService.extrairGeometria(nomeArquivo, conteudo);
-        return criarDeGeometria(usuario, propriedadeId, nome, geometria, confirmarForaDoPara);
+        return criarDeGeometria(usuario, propriedadeId, nome, geometria);
+    }
+
+    /** Resultado da leitura de um arquivo sem cadastrar nada: a tela mostra o poligono no mapa e decide. */
+    public record GeometriaLida(Geometry geometria, boolean dentroDoPara, String mensagem) {}
+
+    /**
+     * Le GeoJSON, KML ou .zip de Shapefile e devolve a geometria para a tela desenhar. Um arquivo fora do
+     * Para volta com {@code dentroDoPara=false} para a pessoa ver onde ele cai; o cadastro continua recusando.
+     */
+    @Transactional(readOnly = true)
+    public GeometriaLida lerGeometriaDeArquivo(String nomeArquivo, byte[] conteudo) {
+        Geometry geometria = importacaoGeoService.extrairGeometria(nomeArquivo, conteudo);
+        if (!ValidacaoGeometria.geometriaValida(geometria)) {
+            throw new AppException(422, "Geometria inválida.");
+        }
+        boolean dentro = ValidacaoGeometria.estaDentroDoPara(geometria);
+        return new GeometriaLida(geometria, dentro, dentro ? null : MENSAGEM_FORA_DO_PARA);
     }
 
     /** SoilGrids nunca bloqueia a criacao do talhao -- nem em erro, nem em "sem cobertura" (RN017). */

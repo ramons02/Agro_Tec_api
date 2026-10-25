@@ -2,8 +2,13 @@ package com.agroclima.api.core.geo;
 
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.MultiPolygon;
-import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.Polygon;
+import org.locationtech.jts.geom.prep.PreparedGeometry;
+import org.locationtech.jts.geom.prep.PreparedGeometryFactory;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Validacao de geometria pura (sem I/O, sem PostGIS) -- porte literal de
@@ -12,18 +17,39 @@ import org.locationtech.jts.geom.Polygon;
  */
 public final class ValidacaoGeometria {
 
-    public static final double PARA_LAT_MIN = -9.9;
-    public static final double PARA_LAT_MAX = 2.6;
-    public static final double PARA_LON_MIN = -59.0;
-    public static final double PARA_LON_MAX = -46.0;
+    /**
+     * Tolerancia sobre o limite do Para, em graus (~1,1 km). O limite oficial do IBGE e generalizado
+     * (3,6 mil vertices para o estado inteiro), entao um talhao colado na divisa ou na margem de um
+     * rio pode cair uns metros "fora" so por causa da simplificacao.
+     */
+    static final double TOLERANCIA_GRAUS = 0.01;
 
     private ValidacaoGeometria() {}
 
-    /** RN016 -- heuristica de confirmacao, nunca bloqueio duro. */
-    public static boolean estaDentroDoPara(Point centroide) {
-        double lat = centroide.getY();
-        double lon = centroide.getX();
-        return lat >= PARA_LAT_MIN && lat <= PARA_LAT_MAX && lon >= PARA_LON_MIN && lon <= PARA_LON_MAX;
+    /** Carrega o limite uma vez, na primeira consulta (carregar o arquivo nao pode atrasar a subida da API). */
+    private static final class LimiteDoPara {
+        static final PreparedGeometry LIMITE = carregar();
+
+        private static PreparedGeometry carregar() {
+            try (InputStream arquivo = ValidacaoGeometria.class.getResourceAsStream("/geo/para.geojson")) {
+                if (arquivo == null) {
+                    throw new IllegalStateException("Limite do Pará (geo/para.geojson) ausente do pacote.");
+                }
+                Geometry estado = GeoJsonUtil.parseGeometria(new String(arquivo.readAllBytes(), StandardCharsets.UTF_8));
+                return PreparedGeometryFactory.prepare(estado.buffer(TOLERANCIA_GRAUS));
+            } catch (IOException ex) {
+                throw new IllegalStateException("Falha ao ler o limite do Pará.", ex);
+            }
+        }
+    }
+
+    /**
+     * Regra de negocio (decisao do dono do produto, 2026-10-24): so vale talhao inteiramente dentro do
+     * estado do Para, pelo limite oficial do IBGE, sem confirmacao que libere. Substitui a antiga
+     * caixa retangular no centroide (RN016), que aceitava Amapa, Maranhao, Tocantins e Amazonas.
+     */
+    public static boolean estaDentroDoPara(Geometry geometria) {
+        return LimiteDoPara.LIMITE.covers(geometria);
     }
 
     public static boolean geometriaValida(Geometry geometria) {

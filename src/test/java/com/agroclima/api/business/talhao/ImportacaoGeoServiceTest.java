@@ -54,51 +54,7 @@ class ImportacaoGeoServiceTest {
     }
 
     private byte[] criarShapefileZip(Polygon poligono, String codigoEpsg) throws Exception {
-        Path diretorio = Files.createTempDirectory("shp-fixture-");
-        File arquivoShp = diretorio.resolve("talhao.shp").toFile();
-
-        ShapefileDataStoreFactory factoryLoja = new ShapefileDataStoreFactory();
-        Map<String, Serializable> parametros = new HashMap<>();
-        parametros.put("url", arquivoShp.toURI().toURL());
-        ShapefileDataStore loja = (ShapefileDataStore) factoryLoja.createNewDataStore(parametros);
-
-        SimpleFeatureTypeBuilder tipoBuilder = new SimpleFeatureTypeBuilder();
-        tipoBuilder.setName("talhao");
-        if (codigoEpsg != null) {
-            CoordinateReferenceSystem crs = CRS.decode(codigoEpsg);
-            tipoBuilder.setCRS(crs);
-        }
-        tipoBuilder.add("the_geom", Polygon.class);
-        tipoBuilder.add("nome", String.class);
-        SimpleFeatureType tipo = tipoBuilder.buildFeatureType();
-        loja.createSchema(tipo);
-
-        SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(tipo);
-        featureBuilder.add(poligono);
-        featureBuilder.add("Talhão Teste");
-        SimpleFeature feature = featureBuilder.buildFeature(null);
-        DefaultFeatureCollection colecao = new DefaultFeatureCollection();
-        colecao.add(feature);
-
-        SimpleFeatureStore featureStore = (SimpleFeatureStore) loja.getFeatureSource();
-        featureStore.addFeatures(colecao);
-        loja.dispose();
-
-        return zipar(diretorio);
-    }
-
-    private byte[] zipar(Path diretorio) throws Exception {
-        ByteArrayOutputStream saida = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(saida)) {
-            try (var arquivos = Files.list(diretorio)) {
-                for (Path arquivo : arquivos.toList()) {
-                    zip.putNextEntry(new ZipEntry(arquivo.getFileName().toString()));
-                    zip.write(Files.readAllBytes(arquivo));
-                    zip.closeEntry();
-                }
-            }
-        }
-        return saida.toByteArray();
+        return com.agroclima.api.support.ShapefileFixture.zip(poligono, codigoEpsg);
     }
 
     @Test

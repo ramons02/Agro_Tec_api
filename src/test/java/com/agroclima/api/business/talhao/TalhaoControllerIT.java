@@ -111,27 +111,40 @@ class TalhaoControllerIT extends IntegrationTestBase {
     }
 
     @Test
-    void talhaoForaDoParaSemConfirmacaoRetorna422ComRequerConfirmacao() {
+    void talhaoForaDoParaRetorna422SemOpcaoDeConfirmar() {
         String token = registrarELogar("dono2@teste.com", "PRODUTOR_RURAL");
         String propriedadeId = criarPropriedade(token, "Fazenda Dois");
 
-        // Sao Paulo, bem fora da bbox do Para
+        // Sao Paulo, bem fora do Para
         ResponseEntity<Map> resposta = criarTalhao(token, propriedadeId, "Talhão Fora", poligono(-46.61, -23.51, 0.01), false);
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         Map<String, Object> detalhes = (Map<String, Object>) resposta.getBody().get("detalhes");
         assertThat(detalhes.get("tipo")).isEqualTo("FORA_DO_PARA");
-        assertThat(detalhes.get("requer_confirmacao")).isEqualTo(true);
+        assertThat(detalhes.get("requer_confirmacao")).isEqualTo(false);
+        assertThat((String) resposta.getBody().get("mensagem")).contains("dentro do estado do Pará");
     }
 
     @Test
-    void talhaoForaDoParaComConfirmacaoEAceito() {
+    void confirmarNaoLiberaTalhaoForaDoPara() {
         String token = registrarELogar("dono3@teste.com", "PRODUTOR_RURAL");
         String propriedadeId = criarPropriedade(token, "Fazenda Tres");
 
+        // O campo antigo confirmar_fora_do_para e ignorado: a regra agora e dura.
         ResponseEntity<Map> resposta = criarTalhao(token, propriedadeId, "Talhão Fora Confirmado", poligono(-46.61, -23.51, 0.01), true);
 
-        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    @Test
+    void talhaoNoMaranhaoDentroDaAntigaCaixaRetangularTambemEhRecusado() {
+        String token = registrarELogar("dono3b@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(token, "Fazenda Tres B");
+
+        // Imperatriz (MA): cabia na caixa retangular que a regra usava antes.
+        ResponseEntity<Map> resposta = criarTalhao(token, propriedadeId, "Talhão MA", poligono(-47.48, -5.52, 0.01), false);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @Test
