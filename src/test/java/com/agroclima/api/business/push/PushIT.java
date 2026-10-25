@@ -214,4 +214,32 @@ class PushIT extends ClimaIntegrationTestBase {
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(assinaturaRepository.findByUsuarioId(dono.getId())).isEmpty();
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testarMandaPushParaOsAparelhosDaContaELimitaARepeticao() {
+        SERVICO_DE_PUSH.stubFor(post(urlPathEqualTo("/push/teste")).willReturn(aResponse().withStatus(201)));
+        Usuario u = novoUsuario("push-testar@teste.com");
+        assinar(u, assinatura(endpointLocal("/push/teste")));
+
+        ResponseEntity<Map> r = rest.exchange("/api/v1/push/testar", HttpMethod.POST, new HttpEntity<>(cabecalhos(u)), Map.class);
+
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(((Map<String, Object>) r.getBody().get("dados")).get("enviados")).isEqualTo(1);
+        SERVICO_DE_PUSH.verify(1, postRequestedFor(urlPathEqualTo("/push/teste")));
+
+        ResponseEntity<String> segunda = rest.exchange("/api/v1/push/testar", HttpMethod.POST, new HttpEntity<>(cabecalhos(u)), String.class);
+        assertThat(segunda.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        SERVICO_DE_PUSH.verify(1, postRequestedFor(urlPathEqualTo("/push/teste")));
+    }
+
+    @Test
+    void testarSemAparelhoAvisaQueFaltaLigar() {
+        Usuario u = novoUsuario("push-testar-vazio@teste.com");
+
+        ResponseEntity<String> r = rest.exchange("/api/v1/push/testar", HttpMethod.POST, new HttpEntity<>(cabecalhos(u)), String.class);
+
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(r.getBody()).contains("Ligue os avisos");
+    }
 }

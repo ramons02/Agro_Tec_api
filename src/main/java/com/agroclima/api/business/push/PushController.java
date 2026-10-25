@@ -25,6 +25,7 @@ import java.util.Map;
 public class PushController {
 
     private static final int MAXIMO_POR_CONTA = 10;
+    private static final long INTERVALO_TESTE_SEGUNDOS = 30;
 
     public record Chaves(@NotBlank @Size(max = 200) String p256dh, @NotBlank @Size(max = 100) String auth) {}
 
@@ -35,8 +36,16 @@ public class PushController {
     private final AssinaturaPushRepository repositorio;
     private final ChavesVapid chaves;
     private final ValidadorDeEndpoint validador;
+    private final NotificadorPush notificador;
+    /** Último teste por conta: evita que um botão apertado sem parar vire spam no celular (e carga no serviço de push). */
+    private final java.util.Map<java.util.UUID, Instant> ultimoTeste = new java.util.concurrent.ConcurrentHashMap<>();
 
-    public PushController(AssinaturaPushRepository repositorio, ChavesVapid chaves, ValidadorDeEndpoint validador) {
+    public PushController(
+            AssinaturaPushRepository repositorio,
+            ChavesVapid chaves,
+            ValidadorDeEndpoint validador,
+            NotificadorPush notificador) {
+        this.notificador = notificador;
         this.repositorio = repositorio;
         this.chaves = chaves;
         this.validador = validador;
@@ -66,6 +75,23 @@ public class PushController {
                     usuario.id(), corpo.endpoint(), corpo.keys().p256dh(), corpo.keys().auth(), Instant.now()));
         }
         return ResponseEntity.noContent().build();
+    }
+
+    /** Manda uma notificação de teste para os aparelhos da própria conta: confirma que os avisos chegam de verdade. */
+    @PostMapping("/testar")
+    public ApiEnvelope<Map<String, Integer>> testar(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+        Instant agora = Instant.now();
+        Instant anterior = ultimoTeste.get(usuario.id());
+        if (anterior != null && anterior.plusSeconds(INTERVALO_TESTE_SEGUNDOS).isAfter(agora)) {
+            throw new AppException(429, "Espere alguns segundos para enviar outro teste.");
+        }
+        if (repositorio.countByUsuarioId(usuario.id()) == 0) {
+            throw new AppException(422, "Nenhum aparelho com avisos ligados. Ligue os avisos no sino primeiro.");
+        }
+        ultimoTeste.put(usuario.id(), agora);
+        int aceitos = notificador.enviar(
+                usuario.id(), "AgroClima Pará", "Teste: os avisos no celular estão funcionando.", "/#/pulverizacao");
+        return ApiEnvelope.sucesso(Map.of("enviados", aceitos));
     }
 
     /** POST (e não DELETE) porque o endpoint é longo demais para ir na URL e DELETE com corpo não é confiável. */

@@ -41,17 +41,19 @@ public class NotificadorPush {
                 : frontendBaseUrl.startsWith("https://") ? frontendBaseUrl : "mailto:contato@agroclima.invalid";
     }
 
-    public void enviar(UUID usuarioId, String titulo, String mensagem, String url) {
+    /** Devolve em quantos aparelhos o serviço de push aceitou a mensagem (0 = nenhum aparelho ou todos falharam). */
+    public int enviar(UUID usuarioId, String titulo, String mensagem, String url) {
         var assinaturas = repositorio.findByUsuarioId(usuarioId);
         if (assinaturas.isEmpty()) {
-            return;
+            return 0;
         }
+        int aceitos = 0;
         String corpo;
         try {
             corpo = json.writeValueAsString(Map.of("titulo", titulo, "mensagem", mensagem, "url", url));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             log.error("Falha ao montar a notificação push: {}", ex.getMessage());
-            return;
+            return 0;
         }
         ChavesVapid.Par par = chaves.obter();
         for (AssinaturaPush assinatura : assinaturas) {
@@ -65,13 +67,16 @@ public class NotificadorPush {
                     repositorio.apagarPorEndpoint(assinatura.getEndpoint());
                 } else if (status >= 300) {
                     log.warn("Serviço de push respondeu {} para uma assinatura da conta {}.", status, usuarioId);
+                } else {
+                    aceitos++;
                 }
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
-                return;
+                return aceitos;
             } catch (Exception ex) {
                 log.warn("Falha ao enviar push para uma assinatura da conta {}: {}", usuarioId, ex.getMessage());
             }
         }
+        return aceitos;
     }
 }
