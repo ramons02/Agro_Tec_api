@@ -102,6 +102,48 @@ public class TalhaoService {
         return new ResultadoCriacao(talhao, aviso);
     }
 
+    /**
+     * Edita nome e geometria de um talhao existente (ex.: o shapefile foi corrigido). Aplica as mesmas
+     * regras da criacao, ignorando o proprio talhao na checagem de sobreposicao, e recalcula area e solo.
+     */
+    @Transactional
+    public ResultadoCriacao atualizarGeometria(
+            UsuarioAutenticado usuario, UUID id, String nome, Geometry geometriaBruta) {
+        Talhao talhao = talhaoRepository.findById(id).orElseThrow(() -> new AppException(404, "Talhão não encontrado."));
+        autorizacaoService.verificarDonoOuGestor(usuario, talhao.getPropriedadeId());
+
+        if (!ValidacaoGeometria.geometriaValida(geometriaBruta)) {
+            throw new AppException(422, "Geometria inválida.");
+        }
+        if (!ValidacaoGeometria.estaDentroDoPara(geometriaBruta)) {
+            throw new AppException(422, MENSAGEM_FORA_DO_PARA,
+                    Map.of("tipo", "FORA_DO_PARA", "requer_confirmacao", false));
+        }
+        Point centroide = geometriaBruta.getCentroid();
+        MultiPolygon geometria = GeometriaUtil.normalizarParaMultiPolygon(geometriaBruta);
+
+        List<String> sobreposicaoMesma = talhaoRepository
+                .buscarSobreposicaoMesmaPropriedadeExceto(talhao.getPropriedadeId(), id, geometria);
+        if (!sobreposicaoMesma.isEmpty()) {
+            throw new AppException(409,
+                    "Geometria sobrepõe o talhão '" + sobreposicaoMesma.get(0) + "' na mesma propriedade.",
+                    Map.of("tipo", "SOBREPOSICAO"));
+        }
+
+        String aviso = null;
+        List<String> sobreposicaoOutra = talhaoRepository
+                .buscarSobreposicaoOutraPropriedadeParaEdicao(talhao.getPropriedadeId(), geometria);
+        if (!sobreposicaoOutra.isEmpty()) {
+            aviso = "Geometria sobrepõe o talhão '" + sobreposicaoOutra.get(0)
+                    + "' de outra propriedade — possível divisa em disputa.";
+        }
+
+        talhao.redefinirGeometria(nome, geometria, talhaoRepository.calcularAreaHa(geometria));
+        parametrizarSoloSemBloquear(talhao, centroide);
+        talhaoRepository.save(talhao);
+        return new ResultadoCriacao(talhao, aviso);
+    }
+
     @Transactional
     public ResultadoCriacao criarDeArquivo(
             UsuarioAutenticado usuario, UUID propriedadeId, String nome, String nomeArquivo, byte[] conteudo) {

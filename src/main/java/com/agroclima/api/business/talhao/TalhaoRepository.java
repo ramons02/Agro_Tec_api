@@ -39,6 +39,25 @@ public interface TalhaoRepository extends JpaRepository<Talhao, UUID> {
     List<String> buscarSobreposicaoOutraPropriedade(
             @Param("propriedadeId") UUID propriedadeId, @Param("geometria") Geometry geometria);
 
+    /** Mesma regra da criacao, ignorando o proprio talhao que esta sendo editado. */
+    @Query(value = "SELECT t.nome FROM talhoes t "
+            + "WHERE t.propriedade_id = :propriedadeId AND t.id <> :talhaoId "
+            + "AND ST_Overlaps(t.geometria, :geometria) "
+            + "AND ST_Area(CAST(ST_Intersection(t.geometria, :geometria) AS geography)) > 10.0",
+            nativeQuery = true)
+    List<String> buscarSobreposicaoMesmaPropriedadeExceto(
+            @Param("propriedadeId") UUID propriedadeId,
+            @Param("talhaoId") UUID talhaoId,
+            @Param("geometria") Geometry geometria);
+
+    @Query(value = "SELECT t.nome FROM talhoes t "
+            + "WHERE t.propriedade_id <> :propriedadeId "
+            + "AND ST_Overlaps(t.geometria, :geometria) "
+            + "AND ST_Area(CAST(ST_Intersection(t.geometria, :geometria) AS geography)) > 10.0",
+            nativeQuery = true)
+    List<String> buscarSobreposicaoOutraPropriedadeParaEdicao(
+            @Param("propriedadeId") UUID propriedadeId, @Param("geometria") Geometry geometria);
+
     /** Area geodesica real (::geography), nunca aproximacao planar em graus. */
     @Query(value = "SELECT ST_Area(CAST(:geometria AS geography)) / 10000.0", nativeQuery = true)
     double calcularAreaHa(@Param("geometria") Geometry geometria);

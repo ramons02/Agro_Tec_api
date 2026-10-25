@@ -85,6 +85,12 @@ public class Talhao extends BaseModel<UUID> {
         this.capacidadeAguaDisponivelMm = escala(capacidadeAguaDisponivelMm, 2);
     }
 
+    public void redefinirGeometria(String nome, MultiPolygon geometria, double areaHa) {
+        this.nome = nome;
+        this.geometria = geometria;
+        this.areaHa = escala(areaHa, 4);
+    }
+
     private static BigDecimal escala(double valor, int casas) {
         return BigDecimal.valueOf(valor).setScale(casas, RoundingMode.HALF_UP);
     }

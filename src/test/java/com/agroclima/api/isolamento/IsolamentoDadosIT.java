@@ -96,6 +96,8 @@ class IsolamentoDadosIT extends IsolamentoBase {
                     "DELETE propriedade", intruso);
             assertRecusado(chamar(HttpMethod.DELETE, "/api/v1/talhoes/" + talhaoB.getId(), intruso, null),
                     "DELETE talhao", intruso);
+            assertRecusado(chamar(HttpMethod.PUT, "/api/v1/talhoes/" + talhaoB.getId(), intruso, Map.of(
+                    "nome", "Invadido", "geometria", jsonDe(GEOJSON_POLIGONO))), "PUT talhao", intruso);
             assertRecusado(chamar(HttpMethod.POST, "/api/v1/talhoes", intruso, Map.of(
                     "propriedade_id", propriedadeB.getId().toString(), "nome", "Intruso",
                     "geometria", jsonDe(GEOJSON_POLIGONO))), "POST talhao", intruso);
@@ -104,7 +106,8 @@ class IsolamentoDadosIT extends IsolamentoBase {
         }
         assertThat(propriedadeRepository.findById(propriedadeB.getId())).get()
                 .extracting(p -> p.getNome()).isEqualTo("Fazenda B");
-        assertThat(talhaoRepository.findById(talhaoB.getId())).isPresent();
+        assertThat(talhaoRepository.findById(talhaoB.getId())).get()
+                .extracting(t -> t.getNome()).isEqualTo("Talhao B");
         assertThat(talhaoRepository.findByPropriedadeId(propriedadeB.getId(), org.springframework.data.domain.Pageable.unpaged()))
                 .hasSize(1);
     }

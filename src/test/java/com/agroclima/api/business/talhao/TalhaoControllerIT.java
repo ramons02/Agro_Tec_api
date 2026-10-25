@@ -245,4 +245,116 @@ class TalhaoControllerIT extends IntegrationTestBase {
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(talhaoRepository.findById(java.util.UUID.fromString(talhaoId))).isEmpty();
     }
+
+    private ResponseEntity<Map> editarTalhao(String token, String talhaoId, String nome, Map<String, Object> geometria) {
+        Map<String, Object> corpo = Map.of("nome", nome, "geometria", geometria);
+        return restTemplate.exchange("/api/v1/talhoes/" + talhaoId, HttpMethod.PUT, new HttpEntity<>(corpo, headersCom(token)), Map.class);
+    }
+
+    private String criarTalhaoId(String token, String propriedadeId, String nome, Map<String, Object> geometria) {
+        return (String) dados(criarTalhao(token, propriedadeId, nome, geometria, false)).get("id");
+    }
+
+    @Test
+    void editarTrocaNomeEGeometriaERecalculaAArea() {
+        String token = registrarELogar("editor1@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(token, "Fazenda Editor Um");
+        String talhaoId = criarTalhaoId(token, propriedadeId, "Talhão Antigo", poligono(-48.50, -1.45, 0.01));
+        double areaAntes = talhaoRepository.findById(java.util.UUID.fromString(talhaoId)).orElseThrow().getAreaHa();
+
+        ResponseEntity<Map> resposta = editarTalhao(token, talhaoId, "Talhão Novo", poligono(-48.50, -1.45, 0.02));
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(dados(resposta).get("nome")).isEqualTo("Talhão Novo");
+        assertThat((Double) dados(resposta).get("area_ha")).isGreaterThan(areaAntes * 3);
+        var salvo = talhaoRepository.findById(java.util.UUID.fromString(talhaoId)).orElseThrow();
+        assertThat(salvo.getNome()).isEqualTo("Talhão Novo");
+        assertThat(talhaoRepository.findByPropriedadeId(java.util.UUID.fromString(propriedadeId),
+                org.springframework.data.domain.Pageable.unpaged())).hasSize(1);
+    }
+
+    @Test
+    void editarNaoContaOProprioTalhaoComoSobreposicao() {
+        String token = registrarELogar("editor2@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(token, "Fazenda Editor Dois");
+        String talhaoId = criarTalhaoId(token, propriedadeId, "Talhão", poligono(-48.50, -1.45, 0.01));
+
+        // quase a mesma area: sobrepoe o proprio talhao, o que nao pode ser tratado como conflito
+        ResponseEntity<Map> resposta = editarTalhao(token, talhaoId, "Talhão", poligono(-48.499, -1.449, 0.01));
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void editarSobrepondoOutroTalhaoDaMesmaPropriedadeDa409() {
+        String token = registrarELogar("editor3@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(token, "Fazenda Editor Tres");
+        criarTalhaoId(token, propriedadeId, "Talhão Vizinho", poligono(-48.50, -1.45, 0.01));
+        String talhaoId = criarTalhaoId(token, propriedadeId, "Talhão Solto", poligono(-48.49, -1.45, 0.005));
+
+        ResponseEntity<Map> resposta = editarTalhao(token, talhaoId, "Talhão Solto", poligono(-48.495, -1.445, 0.01));
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        Map<String, Object> detalhes = (Map<String, Object>) resposta.getBody().get("detalhes");
+        assertThat(detalhes.get("tipo")).isEqualTo("SOBREPOSICAO");
+    }
+
+    @Test
+    void editarParaForaDoParaDa422SemConfirmacaoENadaMuda() {
+        String token = registrarELogar("editor4@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(token, "Fazenda Editor Quatro");
+        String talhaoId = criarTalhaoId(token, propriedadeId, "Talhão Dentro", poligono(-48.50, -1.45, 0.01));
+
+        ResponseEntity<Map> resposta = editarTalhao(token, talhaoId, "Talhão Fora", poligono(-46.61, -23.51, 0.01));
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        Map<String, Object> detalhes = (Map<String, Object>) resposta.getBody().get("detalhes");
+        assertThat(detalhes.get("tipo")).isEqualTo("FORA_DO_PARA");
+        assertThat(talhaoRepository.findById(java.util.UUID.fromString(talhaoId)).orElseThrow().getNome()).isEqualTo("Talhão Dentro");
+    }
+
+    @Test
+    void editarComGeometriaInvalidaOuNomeGrandeRecusa() {
+        String token = registrarELogar("editor5@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(token, "Fazenda Editor Cinco");
+        String talhaoId = criarTalhaoId(token, propriedadeId, "Talhão", poligono(-48.50, -1.45, 0.01));
+
+        Map<String, Object> gravata = Map.of("type", "Polygon", "coordinates", List.of(List.of(
+                List.of(-48.50, -1.45), List.of(-48.49, -1.44), List.of(-48.49, -1.45), List.of(-48.50, -1.44), List.of(-48.50, -1.45))));
+        assertThat(editarTalhao(token, talhaoId, "Talhão", gravata).getStatusCode().is4xxClientError()).isTrue();
+        assertThat(editarTalhao(token, talhaoId, "T".repeat(51), poligono(-48.50, -1.45, 0.01)).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    @Test
+    void editarTalhaoInexistenteDa404() {
+        String token = registrarELogar("editor6@teste.com", "PRODUTOR_RURAL");
+
+        ResponseEntity<Map> resposta = editarTalhao(token, java.util.UUID.randomUUID().toString(), "Talhão", poligono(-48.50, -1.45, 0.01));
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void editarTalhaoDeOutroProdutorEAgronomoSaoRecusados() {
+        String tokenDono = registrarELogar("editor7@teste.com", "PRODUTOR_RURAL");
+        String propriedadeId = criarPropriedade(tokenDono, "Fazenda Editor Sete");
+        String talhaoId = criarTalhaoId(tokenDono, propriedadeId, "Talhão do Dono", poligono(-48.50, -1.45, 0.01));
+
+        String tokenOutro = registrarELogar("editor8@teste.com", "PRODUTOR_RURAL");
+        String tokenAgronomo = registrarELogar("editor9@teste.com", "AGRONOMO");
+
+        for (String intruso : List.of(tokenOutro, tokenAgronomo)) {
+            HttpStatus status = (HttpStatus) editarTalhao(intruso, talhaoId, "Invadido", poligono(-48.50, -1.45, 0.01)).getStatusCode();
+            assertThat(status).isIn(HttpStatus.FORBIDDEN, HttpStatus.NOT_FOUND);
+        }
+        assertThat(talhaoRepository.findById(java.util.UUID.fromString(talhaoId)).orElseThrow().getNome()).isEqualTo("Talhão do Dono");
+    }
+
+    @Test
+    void editarSemTokenDa401() {
+        ResponseEntity<Map> resposta = restTemplate.exchange("/api/v1/talhoes/" + java.util.UUID.randomUUID(), HttpMethod.PUT,
+                new HttpEntity<>(Map.of("nome", "x", "geometria", poligono(-48.50, -1.45, 0.01))), Map.class);
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
 }
