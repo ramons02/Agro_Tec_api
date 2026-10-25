@@ -26,6 +26,7 @@ public abstract class TelegramIntegrationTestBase extends ClimaIntegrationTestBa
         registry.add("app.telegram.bot-token", () -> "token-de-teste");
         registry.add("app.telegram.bot-username", () -> "AgroClimaParaTesteBot");
         registry.add("app.telegram.webhook-secret", () -> SEGREDO_WEBHOOK);
+        registry.add("app.telegram.habilitado", () -> "true");
     }
 
     @BeforeEach
