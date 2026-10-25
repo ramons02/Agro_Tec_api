@@ -37,24 +37,25 @@ public class AuthController {
         this.grupoService = grupoService;
     }
 
-    public record LoginRequest(@Email @NotBlank String email, @NotBlank String senha) {}
+    public record LoginRequest(@Email @NotBlank @Size(max = 255) String email, @NotBlank @Size(max = 128) String senha) {}
 
     public record RegistroRequest(
-            @NotBlank String nome,
-            @Email @NotBlank String email,
-            @Size(min = 8) String senha,
+            @NotBlank @Size(max = 255) String nome,
+            @Email @NotBlank @Size(max = 255) String email,
+            // 72: limite do bcrypt; acima disso o resto da senha seria ignorado.
+            @Size(min = 8, max = 72) String senha,
             @NotNull Papel papel,
-            String convite,
+            @Size(max = 200) String convite,
             /** Codigo do link de cadastro do grupo (opcional): a conta nasce pendente nesse grupo. */
-            String grupo) {}
+            @Size(max = 200) String grupo) {}
 
-    public record TrocarSenhaRequest(@NotBlank String senhaAtual, @Size(min = 8) String senhaNova) {}
+    public record TrocarSenhaRequest(@NotBlank @Size(max = 128) String senhaAtual, @Size(min = 8, max = 72) String senhaNova) {}
 
-    public record ConviteGestorRequest(@Email @NotBlank String email) {}
+    public record ConviteGestorRequest(@Email @NotBlank @Size(max = 255) String email) {}
 
-    public record RecuperarSenhaRequest(@Email @NotBlank String email) {}
+    public record RecuperarSenhaRequest(@Email @NotBlank @Size(max = 255) String email) {}
 
-    public record RedefinirSenhaRequest(@NotBlank String token, @Size(min = 8) String novaSenha) {}
+    public record RedefinirSenhaRequest(@NotBlank @Size(max = 200) String token, @Size(min = 8, max = 72) String novaSenha) {}
 
     @PostMapping("/login")
     public ApiEnvelope<Map<String, Object>> login(@Valid @RequestBody LoginRequest requisicao) {

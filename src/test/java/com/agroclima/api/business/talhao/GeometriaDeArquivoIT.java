@@ -144,6 +144,35 @@ class GeometriaDeArquivoIT extends IntegrationTestBase {
     }
 
     @Test
+    void kmlComDoctypeEEntidadeExternaEhRecusadoESemChamarARede() throws Exception {
+        // Auditoria de 2026-10-24: o parser aceitava a entidade externa e a API fazia a requisicao.
+        java.util.concurrent.atomic.AtomicInteger chamadas = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer ouvinte =
+                com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        ouvinte.createContext("/", troca -> {
+            chamadas.incrementAndGet();
+            byte[] corpo = "-48.5,-1.45,0".getBytes(StandardCharsets.UTF_8);
+            troca.sendResponseHeaders(200, corpo.length);
+            troca.getResponseBody().write(corpo);
+            troca.close();
+        });
+        ouvinte.start();
+        try {
+            String kml = "<?xml version=\"1.0\"?><!DOCTYPE k [<!ENTITY x SYSTEM \"http://127.0.0.1:"
+                    + ouvinte.getAddress().getPort() + "/xxe\">]><kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><Placemark>"
+                    + "<Polygon><outerBoundaryIs><LinearRing><coordinates>-48.5,-1.45,0 -48.49,-1.45,0 -48.49,-1.44,0 -48.5,-1.44,0 &x;"
+                    + "</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>";
+
+            ResponseEntity<String> resposta = enviar("x.kml", kml.getBytes(StandardCharsets.UTF_8), token);
+
+            assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(chamadas.get()).as("a API nao pode buscar a entidade externa").isZero();
+        } finally {
+            ouvinte.stop(0);
+        }
+    }
+
+    @Test
     void shpSozinhoPedeOZipCompleto() {
         ResponseEntity<String> resposta = enviar("talhao.shp", new byte[] {0, 0, 0x27, 0x0a}, token);
 
