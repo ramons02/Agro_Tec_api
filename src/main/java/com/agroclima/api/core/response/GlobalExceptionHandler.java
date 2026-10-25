@@ -47,6 +47,12 @@ public class GlobalExceptionHandler {
                 .body(ErrorEnvelope.of(422, "Dados de entrada inválidos.", detalhes));
     }
 
+    /** Arquivo ou GeoJSON de geometria que nao da para ler: as mensagens sao fixas e escritas para quem enviou. */
+    @ExceptionHandler(com.agroclima.api.core.geo.GeometriaInvalidaException.class)
+    public ResponseEntity<ErrorEnvelope> tratarGeometriaInvalida(com.agroclima.api.core.geo.GeometriaInvalidaException ex) {
+        return resposta(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorEnvelope> tratarCorpoIlegivel(HttpMessageNotReadableException ex) {
         return resposta(HttpStatus.BAD_REQUEST, "Corpo da requisição ausente ou malformado.");

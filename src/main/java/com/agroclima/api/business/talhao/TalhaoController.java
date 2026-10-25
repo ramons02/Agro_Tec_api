@@ -66,15 +66,14 @@ public class TalhaoController {
     public record TalhaoRequest(
             @NotNull UUID propriedadeId,
             @NotBlank String nome,
-            @NotNull JsonNode geometria,
-            boolean confirmarForaDoPara) {}
+            @NotNull JsonNode geometria) {}
 
     @PostMapping
     public ApiEnvelope<Map<String, Object>> criar(
             @AuthenticationPrincipal UsuarioAutenticado usuario, @Valid @RequestBody TalhaoRequest requisicao) {
         Geometry geometria = GeoJsonUtil.parseGeometria(requisicao.geometria().toString());
         var resultado = talhaoService.criarDeGeometria(
-                usuario, requisicao.propriedadeId(), requisicao.nome(), geometria, requisicao.confirmarForaDoPara());
+                usuario, requisicao.propriedadeId(), requisicao.nome(), geometria);
         return ApiEnvelope.sucesso(paraDadosComAviso(resultado));
     }
 
@@ -83,8 +82,7 @@ public class TalhaoController {
             @AuthenticationPrincipal UsuarioAutenticado usuario,
             @RequestParam("propriedade_id") UUID propriedadeId,
             @RequestParam("nome") String nome,
-            @RequestParam("arquivo") MultipartFile arquivo,
-            @RequestParam(name = "confirmar_fora_do_para", defaultValue = "false") boolean confirmarForaDoPara) {
+            @RequestParam("arquivo") MultipartFile arquivo) {
         byte[] conteudo;
         try {
             conteudo = arquivo.getBytes();
@@ -96,8 +94,29 @@ public class TalhaoController {
             throw new GeometriaInvalidaException("Arquivo sem nome.");
         }
         var resultado = talhaoService.criarDeArquivo(
-                usuario, propriedadeId, nome, nomeArquivo, conteudo, confirmarForaDoPara);
+                usuario, propriedadeId, nome, nomeArquivo, conteudo);
         return ApiEnvelope.sucesso(paraDadosComAviso(resultado));
+    }
+
+    /** Le o arquivo (GeoJSON, KML ou .zip de Shapefile) e devolve o poligono, sem cadastrar nada, para a tela mostrar no mapa. */
+    @PostMapping(value = "/geometria-de-arquivo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiEnvelope<Map<String, Object>> geometriaDeArquivo(@RequestParam("arquivo") MultipartFile arquivo) {
+        byte[] conteudo;
+        try {
+            conteudo = arquivo.getBytes();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        String nomeArquivo = arquivo.getOriginalFilename();
+        if (nomeArquivo == null || nomeArquivo.isBlank()) {
+            throw new GeometriaInvalidaException("Arquivo sem nome.");
+        }
+        TalhaoService.GeometriaLida lida = talhaoService.lerGeometriaDeArquivo(nomeArquivo, conteudo);
+        Map<String, Object> dados = new java.util.LinkedHashMap<>();
+        dados.put("geometria", GeoJsonUtil.paraGeoJsonNode(lida.geometria()));
+        dados.put("dentro_do_para", lida.dentroDoPara());
+        dados.put("mensagem", lida.mensagem());
+        return ApiEnvelope.sucesso(dados);
     }
 
     @GetMapping
