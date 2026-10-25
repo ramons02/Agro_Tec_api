@@ -39,6 +39,11 @@ app:
     user: ${SMTP_USER:}
     password: ${SMTP_PASSWORD:}
     from: ${SMTP_FROM:}
+  email:
+    brevo-api-key: ${BREVO_API_KEY:}
+    from: ${EMAIL_FROM:}
+    from-name: ${EMAIL_FROM_NAME:AgroClima Pará}
+    brevo-base-url: ${BREVO_BASE_URL:https://api.brevo.com}
   openmeteo:
     base-url: ${OPENMETEO_BASE_URL:https://api.open-meteo.com}
     proxy-key: ${OPENMETEO_PROXY_KEY:}
