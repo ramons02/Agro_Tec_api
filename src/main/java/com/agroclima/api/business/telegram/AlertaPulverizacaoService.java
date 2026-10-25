@@ -7,6 +7,7 @@ import com.agroclima.api.business.auth.StatusConta;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
 import com.agroclima.api.business.propriedade.Propriedade;
+import com.agroclima.api.business.push.NotificadorPush;
 import com.agroclima.api.business.propriedade.PropriedadeRepository;
 import com.agroclima.api.business.talhao.PulverizacaoService;
 import com.agroclima.api.business.talhao.Talhao;
@@ -51,6 +52,7 @@ public class AlertaPulverizacaoService {
     private final TelegramClient telegramClient;
     private final AlertaRepository alertaRepository;
     private final AppProperties appProperties;
+    private final NotificadorPush notificadorPush;
 
     public AlertaPulverizacaoService(
             TalhaoRepository talhaoRepository,
@@ -61,7 +63,8 @@ public class AlertaPulverizacaoService {
             PulverizacaoService pulverizacaoService,
             TelegramClient telegramClient,
             AlertaRepository alertaRepository,
-            AppProperties appProperties) {
+            AppProperties appProperties,
+            NotificadorPush notificadorPush) {
         this.talhaoRepository = talhaoRepository;
         this.propriedadeRepository = propriedadeRepository;
         this.usuarioRepository = usuarioRepository;
@@ -71,6 +74,7 @@ public class AlertaPulverizacaoService {
         this.telegramClient = telegramClient;
         this.alertaRepository = alertaRepository;
         this.appProperties = appProperties;
+        this.notificadorPush = notificadorPush;
     }
 
     public record ResumoAlertas(int talhoesProcessados, int alertasEnviados) {}
@@ -151,6 +155,7 @@ public class AlertaPulverizacaoService {
             }
             alertaRepository.save(new Alerta(usuario.getId(), talhao.getId(), tipo, texto, agora));
             criados++;
+            notificadorPush.enviar(usuario.getId(), "AgroClima Pará", texto, "/#/pulverizacao");
             if (appProperties.telegram().habilitado()) {
                 String chatId = usuario.getTelegramChatId();
                 if (chatId != null && !chatId.isBlank()) {

@@ -101,6 +101,10 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "GET /api/v1/alertas",
             "POST /api/v1/alertas/{id}/lido",
             "POST /api/v1/alertas/lidos",
+            // Notificacao push: assinatura do proprio aparelho da pessoa (filtro por usuario, nao por grupo).
+            "GET /api/v1/push/chave",
+            "POST /api/v1/push/assinaturas",
+            "POST /api/v1/push/assinaturas/remover",
             "POST /api/v1/telegram/vincular-link",
             "POST /api/v1/telegram/webhook",
             "DELETE /api/v1/telegram/vinculo",

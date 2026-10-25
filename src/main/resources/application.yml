@@ -45,6 +45,11 @@ app:
   metno:
     base-url: ${METNO_BASE_URL:https://api.met.no}
     user-agent: ${METNO_USER_AGENT:}
+  push:
+    vapid-public-key: ${VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${VAPID_PRIVATE_KEY:}
+    subject: ${PUSH_SUBJECT:}
+    permitir-endpoint-local: false
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
     bot-username: ${TELEGRAM_BOT_USERNAME:}
