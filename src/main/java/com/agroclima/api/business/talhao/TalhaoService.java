@@ -86,7 +86,7 @@ public class TalhaoService {
         List<String> sobreposicaoOutra = talhaoRepository.buscarSobreposicaoOutraPropriedade(propriedadeId, geometria);
         if (!sobreposicaoOutra.isEmpty()) {
             aviso = "Geometria sobrepõe o talhão '" + sobreposicaoOutra.get(0)
-                    + "' de outra propriedade — possível divisa em disputa.";
+                    + "' de outra propriedade, possível divisa em disputa.";
         }
 
         double areaHa = talhaoRepository.calcularAreaHa(geometria);
@@ -129,7 +129,7 @@ public class TalhaoService {
                 .buscarSobreposicaoOutraPropriedadeParaEdicao(talhao.getPropriedadeId(), geometria);
         if (!sobreposicaoOutra.isEmpty()) {
             aviso = "Geometria sobrepõe o talhão '" + sobreposicaoOutra.get(0)
-                    + "' de outra propriedade — possível divisa em disputa.";
+                    + "' de outra propriedade, possível divisa em disputa.";
         }
 
         talhao.redefinirGeometria(nome, geometria, talhaoRepository.calcularAreaHa(geometria));

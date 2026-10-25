@@ -14,7 +14,7 @@ public final class RecomendacaoCalculos {
 
     public static final double LIMITE_TENDENCIA_PP = 1.5;
     public static final String AVISO_FIXO =
-            "Sugestão gerada automaticamente — não substitui avaliação agronômica profissional.";
+            "Sugestão gerada automaticamente, não substitui avaliação agronômica profissional.";
 
     private static final Map<TendenciaUmidade, String> TEXTO_AMARELO_POR_TENDENCIA = new EnumMap<>(TendenciaUmidade.class);
     private static final Map<ClassificacaoPulverizacao, String> CLAUSULA_PULVERIZACAO =
@@ -26,20 +26,20 @@ public final class RecomendacaoCalculos {
 
     static {
         TEXTO_AMARELO_POR_TENDENCIA.put(TendenciaUmidade.SUBINDO,
-                "Solo em nível de atenção e melhorando — monitore antes de decidir o plantio.");
+                "Solo em nível de atenção e melhorando, monitore antes de decidir o plantio.");
         TEXTO_AMARELO_POR_TENDENCIA.put(TendenciaUmidade.CAINDO,
-                "Solo em nível de atenção e piorando — a janela de plantio pode fechar em breve.");
+                "Solo em nível de atenção e piorando, a janela de plantio pode fechar em breve.");
         TEXTO_AMARELO_POR_TENDENCIA.put(TendenciaUmidade.ESTAVEL,
-                "Solo em nível de atenção estável — vale reavaliar antes de decidir o plantio.");
+                "Solo em nível de atenção estável, vale reavaliar antes de decidir o plantio.");
 
         CLAUSULA_PULVERIZACAO.put(ClassificacaoPulverizacao.FAVORAVEL,
                 "Janela de pulverização liberada agora.");
         CLAUSULA_PULVERIZACAO.put(ClassificacaoPulverizacao.BLOQUEIO_VENTO_FORTE,
-                "Pulverização bloqueada por vento forte — aguarde a próxima checagem.");
+                "Pulverização bloqueada por vento forte, aguarde a próxima checagem.");
         CLAUSULA_PULVERIZACAO.put(ClassificacaoPulverizacao.BLOQUEIO_INVERSAO_TERMICA,
-                "Pulverização bloqueada por inversão térmica — não aplique defensivos até a condição normalizar.");
+                "Pulverização bloqueada por inversão térmica, não aplique defensivos até a condição normalizar.");
         CLAUSULA_PULVERIZACAO.put(ClassificacaoPulverizacao.BLOQUEIO_EVAPORACAO_EXCESSIVA,
-                "Pulverização bloqueada por evaporação excessiva — a calda pode não atingir o alvo.");
+                "Pulverização bloqueada por evaporação excessiva, a calda pode não atingir o alvo.");
     }
 
     private RecomendacaoCalculos() {}
@@ -70,9 +70,9 @@ public final class RecomendacaoCalculos {
             return "Ainda sem balanço hídrico calculado para este talhão.";
         }
         return switch (statusPlantio) {
-            case VERMELHO -> "Solo em risco crítico — evite tráfego de maquinário pesado até a umidade se recuperar.";
+            case VERMELHO -> "Solo em risco crítico: evite tráfego de maquinário pesado até a umidade se recuperar.";
             case AMARELO -> TEXTO_AMARELO_POR_TENDENCIA.get(tendenciaUmidade);
-            case VERDE -> "Solo em condição ideal para plantio — sem restrições hídricas no momento.";
+            case VERDE -> "Solo em condição ideal para plantio, sem restrições hídricas no momento.";
         };
     }
 

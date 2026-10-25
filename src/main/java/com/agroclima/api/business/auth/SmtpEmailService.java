@@ -18,7 +18,7 @@ public class SmtpEmailService implements EmailService {
         SimpleMailMessage mensagem = new SimpleMailMessage();
         mensagem.setFrom(remetente);
         mensagem.setTo(destinatario);
-        mensagem.setSubject("Redefinição de senha — AgroClima Pará");
+        mensagem.setSubject("Redefinição de senha, AgroClima Pará");
         mensagem.setText(
                 "Clique no link abaixo para redefinir sua senha (válido por 1 hora):\n\n" + link);
         mailSender.send(mensagem);

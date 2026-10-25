@@ -11,6 +11,6 @@ public class LogTelegramClient implements TelegramClient {
 
     @Override
     public void enviarMensagem(String chatId, String texto) {
-        log.warn("TELEGRAM_BOT_TOKEN não configurado — mensagem não enviada ao chat {}: {}", chatId, texto);
+        log.warn("TELEGRAM_BOT_TOKEN não configurado, mensagem não enviada ao chat {}: {}", chatId, texto);
     }
 }
