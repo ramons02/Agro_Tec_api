@@ -50,6 +50,7 @@ app:
     bot-username: ${TELEGRAM_BOT_USERNAME:}
     base-url: ${TELEGRAM_BASE_URL:https://api.telegram.org}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+    habilitado: ${TELEGRAM_HABILITADO:false}
 
 server:
   port: ${PORT:8000}

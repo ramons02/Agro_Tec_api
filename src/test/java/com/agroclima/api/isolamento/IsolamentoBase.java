@@ -97,6 +97,10 @@ public abstract class IsolamentoBase extends IntegrationTestBase {
             "GET /api/v1/previsao",
             // So interpreta o arquivo enviado e devolve o poligono: nao le nem grava dado de nenhum grupo.
             "POST /api/v1/talhoes/geometria-de-arquivo",
+            // Alertas do sino: cada pessoa so ve e marca os proprios (filtro por usuario, nao por grupo).
+            "GET /api/v1/alertas",
+            "POST /api/v1/alertas/{id}/lido",
+            "POST /api/v1/alertas/lidos",
             "POST /api/v1/telegram/vincular-link",
             "POST /api/v1/telegram/webhook",
             "DELETE /api/v1/telegram/vinculo",

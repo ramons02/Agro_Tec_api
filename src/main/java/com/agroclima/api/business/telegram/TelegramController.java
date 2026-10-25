@@ -36,6 +36,7 @@ public class TelegramController {
 
     @PostMapping("/vincular-link")
     public ApiEnvelope<Map<String, String>> vincularLink(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+        exigirHabilitado();
         String link = telegramService.gerarLinkVinculo(usuario.id());
         return ApiEnvelope.sucesso(Map.of("link", link));
     }
@@ -44,9 +45,17 @@ public class TelegramController {
     public Map<String, Boolean> webhook(
             @RequestHeader(value = HEADER_SEGREDO_WEBHOOK, required = false) String segredoRecebido,
             @RequestBody JsonNode payload) {
+        exigirHabilitado();
         validarSegredoDoWebhook(segredoRecebido);
         telegramService.processarWebhook(payload);
         return Map.of("ok", true);
+    }
+
+    /** Telegram desligado (TELEGRAM_HABILITADO=false): os alertas vao para o sino do app. */
+    private void exigirHabilitado() {
+        if (!appProperties.telegram().habilitado()) {
+            throw new AppException(404, "Recurso indisponível.");
+        }
     }
 
     /** Falha fechada: sem TELEGRAM_WEBHOOK_SECRET configurado nenhum webhook e aceito. O mesmo valor
@@ -62,6 +71,7 @@ public class TelegramController {
 
     @DeleteMapping("/vinculo")
     public ResponseEntity<Void> desvincular(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+        exigirHabilitado();
         telegramService.desvincular(usuario.id());
         return ResponseEntity.noContent().build();
     }

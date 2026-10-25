@@ -1,5 +1,8 @@
 package com.agroclima.api.business.telegram;
 
+import com.agroclima.api.business.alerta.Alerta;
+import com.agroclima.api.business.alerta.AlertaRepository;
+import com.agroclima.api.business.alerta.TipoAlerta;
 import com.agroclima.api.business.auth.StatusConta;
 import com.agroclima.api.business.auth.Usuario;
 import com.agroclima.api.business.auth.UsuarioRepository;
@@ -12,13 +15,14 @@ import com.agroclima.api.business.vinculo.EstadoVinculo;
 import com.agroclima.api.business.vinculo.VinculoAgronomoPropriedadeRepository;
 import com.agroclima.api.core.calculos.ClassificacaoPulverizacao;
 import com.agroclima.api.core.calculos.PulverizacaoCalculos;
+import com.agroclima.api.core.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +49,8 @@ public class AlertaPulverizacaoService {
     private final EstadoAlertaPulverizacaoRepository estadoRepository;
     private final PulverizacaoService pulverizacaoService;
     private final TelegramClient telegramClient;
+    private final AlertaRepository alertaRepository;
+    private final AppProperties appProperties;
 
     public AlertaPulverizacaoService(
             TalhaoRepository talhaoRepository,
@@ -53,7 +59,9 @@ public class AlertaPulverizacaoService {
             VinculoAgronomoPropriedadeRepository vinculoRepository,
             EstadoAlertaPulverizacaoRepository estadoRepository,
             PulverizacaoService pulverizacaoService,
-            TelegramClient telegramClient) {
+            TelegramClient telegramClient,
+            AlertaRepository alertaRepository,
+            AppProperties appProperties) {
         this.talhaoRepository = talhaoRepository;
         this.propriedadeRepository = propriedadeRepository;
         this.usuarioRepository = usuarioRepository;
@@ -61,9 +69,17 @@ public class AlertaPulverizacaoService {
         this.estadoRepository = estadoRepository;
         this.pulverizacaoService = pulverizacaoService;
         this.telegramClient = telegramClient;
+        this.alertaRepository = alertaRepository;
+        this.appProperties = appProperties;
     }
 
     public record ResumoAlertas(int talhoesProcessados, int alertasEnviados) {}
+
+    /** Rajada forte dura horas e o job roda a cada 30 minutos: o mesmo aviso nao se repete dentro desta janela. */
+    private static final Duration SILENCIO_RAJADA = Duration.ofHours(3);
+
+    /** Alertas mais antigos que isto saem do sino (e do banco). */
+    private static final Duration RETENCAO = Duration.ofDays(30);
 
     @Transactional
     public ResumoAlertas processarTodosTalhoes() {
@@ -71,20 +87,22 @@ public class AlertaPulverizacaoService {
         int enviados = 0;
         for (Talhao talhao : talhaoRepository.findAll()) {
             try {
-                List<String> chatIds = chatIdsComAcesso(talhao);
-                if (chatIds.isEmpty()) {
+                List<Usuario> destinatarios = destinatariosComAcesso(talhao);
+                if (destinatarios.isEmpty()) {
                     continue; // ninguem pra avisar -- nem vale calcular o clima (FR-005/custo)
                 }
                 processados++;
-                enviados += processarTalhao(talhao, chatIds);
+                enviados += processarTalhao(talhao, destinatarios);
             } catch (RuntimeException ex) {
                 log.error("Falha ao processar alerta de pulverização do talhão {}: {}", talhao.getId(), ex.getMessage());
             }
         }
+        alertaRepository.apagarAnterioresA(Instant.now().minus(RETENCAO));
         return new ResumoAlertas(processados, enviados);
     }
 
-    private List<String> chatIdsComAcesso(Talhao talhao) {
+    /** Dono da propriedade e agronomos com vinculo aceito. Conta suspensa (ou ainda pendente) nao recebe: so ATIVA. */
+    private List<Usuario> destinatariosComAcesso(Talhao talhao) {
         Propriedade propriedade = propriedadeRepository.findById(talhao.getPropriedadeId()).orElse(null);
         if (propriedade == null) {
             return List.of();
@@ -94,15 +112,12 @@ public class AlertaPulverizacaoService {
         vinculoRepository.findByPropriedadeIdAndEstado(propriedade.getId(), EstadoVinculo.ACEITO)
                 .forEach(vinculo -> usuarioIds.add(vinculo.getAgronomoId()));
 
-        // Conta suspensa (ou ainda pendente) nao recebe alerta: so contas ATIVAS (spec 022, FR-017).
         return usuarioRepository.findAllById(usuarioIds).stream()
                 .filter(usuario -> usuario.getStatus() == StatusConta.ATIVA)
-                .map(Usuario::getTelegramChatId)
-                .filter(chatId -> chatId != null && !chatId.isBlank())
                 .toList();
     }
 
-    private int processarTalhao(Talhao talhao, List<String> chatIds) {
+    private int processarTalhao(Talhao talhao, List<Usuario> destinatarios) {
         Optional<PulverizacaoService.ResultadoPulverizacao> resultadoOpt = pulverizacaoService.classificarAtual(talhao);
         if (resultadoOpt.isEmpty()) {
             return 0;
@@ -112,17 +127,38 @@ public class AlertaPulverizacaoService {
 
         if (classificacaoAbriuJanela(talhao.getId(), resultado.classificacaoFinal())) {
             String texto = "Talhão " + talhao.getNome() + ": janela de pulverização favorável agora.";
-            enviados += enviarParaTodos(chatIds, texto);
+            enviados += avisar(destinatarios, talhao, TipoAlerta.JANELA_FAVORAVEL, texto, false);
         }
 
         Double rajada = resultado.rajadaKmh();
         if (rajada != null && rajada > PulverizacaoCalculos.LIMITE_RAJADA_MAX_FAVORAVEL) {
             String texto = "Talhão " + talhao.getNome() + ": rajada de " + Math.round(rajada)
                     + " km/h detectada, acima do limite seguro para pulverização.";
-            enviados += enviarParaTodos(chatIds, texto);
+            enviados += avisar(destinatarios, talhao, TipoAlerta.RAJADA_FORTE, texto, true);
         }
 
         return enviados;
+    }
+
+    /** Grava o alerta no sino de cada pessoa e, se o Telegram estiver ligado, manda tambem por la. Devolve quantos alertas novos. */
+    private int avisar(List<Usuario> destinatarios, Talhao talhao, TipoAlerta tipo, String texto, boolean comSilencio) {
+        Instant agora = Instant.now();
+        int criados = 0;
+        for (Usuario usuario : destinatarios) {
+            if (comSilencio && alertaRepository.existsByUsuarioIdAndTalhaoIdAndTipoAndCriadoEmAfter(
+                    usuario.getId(), talhao.getId(), tipo, agora.minus(SILENCIO_RAJADA))) {
+                continue;
+            }
+            alertaRepository.save(new Alerta(usuario.getId(), talhao.getId(), tipo, texto, agora));
+            criados++;
+            if (appProperties.telegram().habilitado()) {
+                String chatId = usuario.getTelegramChatId();
+                if (chatId != null && !chatId.isBlank()) {
+                    telegramClient.enviarMensagem(chatId, texto);
+                }
+            }
+        }
+        return criados;
     }
 
     /** Compara com o ultimo estado conhecido (US2/research.md) -- so "abriu" numa transicao
@@ -144,14 +180,5 @@ public class AlertaPulverizacaoService {
         boolean estavaBloqueada = classificacaoAnterior != null && classificacaoAnterior != ClassificacaoPulverizacao.FAVORAVEL;
         boolean abriuAgora = classificacaoAtual == ClassificacaoPulverizacao.FAVORAVEL;
         return estavaBloqueada && abriuAgora;
-    }
-
-    private int enviarParaTodos(List<String> chatIds, String texto) {
-        List<String> enviados = new ArrayList<>();
-        for (String chatId : chatIds) {
-            telegramClient.enviarMensagem(chatId, texto);
-            enviados.add(chatId);
-        }
-        return enviados.size();
     }
 }
