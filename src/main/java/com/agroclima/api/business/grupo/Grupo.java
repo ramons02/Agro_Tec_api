@@ -46,6 +46,10 @@ public class Grupo extends BaseModel<UUID> {
         this.criadoEm = agora;
     }
 
+    public void renomear(String novoNome) {
+        this.nome = novoNome;
+    }
+
     /** O codigo antigo deixa de valer no mesmo instante: so o hash do atual e guardado. */
     public void renovarCodigoCadastro(String novoHash, Instant agora) {
         this.codigoCadastroHash = novoHash;

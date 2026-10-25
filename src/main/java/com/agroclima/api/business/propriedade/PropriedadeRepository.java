@@ -29,6 +29,8 @@ public interface PropriedadeRepository extends JpaRepository<Propriedade, UUID> 
     @Query("UPDATE Propriedade p SET p.grupoId = :grupoId WHERE p.proprietarioId = :donoId")
     int atualizarGrupoDoDono(@Param("donoId") UUID donoId, @Param("grupoId") UUID grupoId);
 
+    boolean existsByGrupoId(UUID grupoId);
+
     /** Propriedades de um grupo (Admin ve o grupo todo; spec 024). */
     @Query("SELECT p.id FROM Propriedade p WHERE p.grupoId = :grupoId")
     List<UUID> findIdByGrupoId(@Param("grupoId") UUID grupoId);
