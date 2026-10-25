@@ -10,6 +10,6 @@ public class LogEmailService implements EmailService {
 
     @Override
     public void enviarRecuperacaoSenha(String destinatario, String link) {
-        log.warn("SMTP não configurado — link de recuperação de senha para {}: {}", destinatario, link);
+        log.warn("SMTP não configurado, link de recuperação de senha para {}: {}", destinatario, link);
     }
 }
