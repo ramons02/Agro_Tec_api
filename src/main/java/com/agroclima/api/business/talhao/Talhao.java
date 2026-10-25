@@ -85,6 +85,16 @@ public class Talhao extends BaseModel<UUID> {
         this.capacidadeAguaDisponivelMm = escala(capacidadeAguaDisponivelMm, 2);
     }
 
+    /** Zera o perfil do solo: a geometria mudou e o perfil e buscado de novo no centroide novo. */
+    public void limparSolo() {
+        this.tipoSolo = null;
+        this.fracaoArgilaPct = null;
+        this.fracaoAreiaPct = null;
+        this.fracaoSiltePct = null;
+        this.materiaOrganicaPct = null;
+        this.capacidadeAguaDisponivelMm = null;
+    }
+
     public void redefinirGeometria(String nome, MultiPolygon geometria, double areaHa) {
         this.nome = nome;
         this.geometria = geometria;

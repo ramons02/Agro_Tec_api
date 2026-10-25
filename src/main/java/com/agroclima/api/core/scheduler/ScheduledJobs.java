@@ -1,6 +1,7 @@
 package com.agroclima.api.core.scheduler;
 
 import com.agroclima.api.business.balancohidrico.BalancoHidricoService;
+import com.agroclima.api.business.talhao.TalhaoSoloService;
 import com.agroclima.api.business.telegram.AlertaPulverizacaoService;
 import com.agroclima.api.core.security.ArmazemJdbc;
 import org.slf4j.Logger;
@@ -23,14 +24,29 @@ public class ScheduledJobs {
     private final BalancoHidricoService balancoHidricoService;
     private final AlertaPulverizacaoService alertaPulverizacaoService;
     private final ArmazemJdbc limitesDeTentativas;
+    private final TalhaoSoloService talhaoSoloService;
 
     public ScheduledJobs(
             BalancoHidricoService balancoHidricoService,
             AlertaPulverizacaoService alertaPulverizacaoService,
-            ArmazemJdbc limitesDeTentativas) {
+            ArmazemJdbc limitesDeTentativas,
+            TalhaoSoloService talhaoSoloService) {
         this.balancoHidricoService = balancoHidricoService;
         this.alertaPulverizacaoService = alertaPulverizacaoService;
         this.limitesDeTentativas = limitesDeTentativas;
+        this.talhaoSoloService = talhaoSoloService;
+    }
+
+    /** A cada 10 minutos -- completa o solo (SoilGrids) de talhao que nasceu sem ele; ver TalhaoSoloService. */
+    @Scheduled(initialDelay = 60_000, fixedDelay = 600_000)
+    public void completarSoloPendente() {
+        if (!talhaoSoloService.segundoPlanoAtivo()) {
+            return;
+        }
+        int completados = talhaoSoloService.completarPendentes();
+        if (completados > 0) {
+            log.info("Solo completado em segundo plano para {} talhões.", completados);
+        }
     }
 
     /** Diario -- apaga as linhas vencidas de limite_tentativas (login, senha e cadastro). */

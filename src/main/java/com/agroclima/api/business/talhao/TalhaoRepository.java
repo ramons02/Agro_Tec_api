@@ -19,6 +19,9 @@ public interface TalhaoRepository extends JpaRepository<Talhao, UUID> {
 
     Page<Talhao> findByPropriedadeIdIn(List<UUID> propriedadeIds, Pageable pageable);
 
+    /** Talhoes cujo perfil de solo ainda nao foi buscado (ou falhou); o job de segundo plano completa. */
+    List<Talhao> findByTipoSoloIsNull();
+
     Page<Talhao> findByPropriedadeId(UUID propriedadeId, Pageable pageable);
 
     /** RN015 -- sobreposicao dentro da mesma propriedade, area da intersecao > 10m2, bloqueia. */

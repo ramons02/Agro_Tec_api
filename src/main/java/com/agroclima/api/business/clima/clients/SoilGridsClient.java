@@ -1,6 +1,7 @@
 package com.agroclima.api.business.clima.clients;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -10,8 +11,8 @@ import java.time.Duration;
 import java.util.Optional;
 
 /**
- * Espelha app/services/soilgrids_service.py (feature 004). Timeout 5s (mais frouxo que
- * Open-Meteo -- e uma consulta pontual na criacao do talhao, nao hot-path).
+ * Espelha app/services/soilgrids_service.py (feature 004). Timeout de 90 s por padrao:
+ * o SoilGrids leva de 30 s a mais de 1 min (medido em 2026-10), e a consulta roda em segundo plano.
  * "Sem cobertura" (layers vazio ou clay/sand/silt ausentes) e Optional.empty() -- resposta
  * legitima, diferente de FonteSoloIndisponivelException (erro de rede/HTTP).
  */
@@ -19,15 +20,15 @@ import java.util.Optional;
 public class SoilGridsClient {
 
     private static final String URL = "https://rest.isric.org/soilgrids/v2.0/properties/query";
-    private static final Duration TIMEOUT = Duration.ofSeconds(5);
     private static final String PROFUNDIDADE = "0-5cm";
 
     private final RestClient restClient;
 
-    public SoilGridsClient() {
+    public SoilGridsClient(@Value("${agroclima.solo.timeout-segundos:90}") long timeoutSegundos) {
+        Duration timeout = Duration.ofSeconds(timeoutSegundos);
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout((int) TIMEOUT.toMillis());
-        factory.setReadTimeout((int) TIMEOUT.toMillis());
+        factory.setConnectTimeout((int) timeout.toMillis());
+        factory.setReadTimeout((int) timeout.toMillis());
         this.restClient = RestClient.builder().baseUrl(URL).requestFactory(factory).build();
     }
 
