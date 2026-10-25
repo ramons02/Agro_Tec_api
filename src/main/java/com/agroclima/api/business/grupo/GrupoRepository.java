@@ -13,6 +13,8 @@ public interface GrupoRepository extends JpaRepository<Grupo, UUID> {
 
     boolean existsByNomeIgnoreCase(String nome);
 
+    boolean existsByNomeIgnoreCaseAndIdNot(String nome, UUID id);
+
     /** O grupo mais antigo e o grupo inicial criado pela migracao (fase 1 da spec 024). */
     Optional<Grupo> findFirstByOrderByCriadoEmAscIdAsc();
 }

@@ -263,6 +263,70 @@ public class GrupoService {
         return new ResultadoReatribuicao(produtores, agronomos);
     }
 
+    /** Renomeia o grupo; o nome continua unico, sem diferenciar maiusculas de minusculas. So o Master. */
+    @Transactional
+    public ItemGrupo renomear(UsuarioAutenticado solicitante, UUID grupoId, String novoNome) {
+        autorizacaoService.exigirMaster(solicitante);
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new AppException(404, "Grupo não encontrado."));
+        String nome = novoNome.trim();
+        if (nome.isEmpty()) {
+            throw new AppException(422, "Informe o nome do grupo.");
+        }
+        if (grupoRepository.existsByNomeIgnoreCaseAndIdNot(nome, grupo.getId())) {
+            throw new AppException(409, "Já existe um grupo com esse nome.");
+        }
+        String anterior = grupo.getNome();
+        grupo.renomear(nome);
+        grupoRepository.save(grupo);
+        Usuario admin = usuarioRepository.findById(grupo.getAdminId()).orElse(null);
+        auditoriaRepository.save(new AuditoriaConta(solicitante.id(), AcaoAuditoria.RENOMEAR_GRUPO, grupo.getAdminId(),
+                        admin == null ? "" : admin.getEmail(), "de " + anterior + " para " + nome, clock.instant())
+                .comGrupo(grupo.getId()));
+        return new ItemGrupo(
+                grupo.getId(), grupo.getNome(),
+                admin == null ? null : new AdminResumo(admin.getId(), admin.getNome(), admin.getEmail()),
+                usuariosDoGrupo(grupo.getId()), grupo.getCriadoEm());
+    }
+
+    /**
+     * Exclui um grupo vazio: so o Admin dele, nenhum produtor, agronomo ou propriedade (senao 409, nada e perdido).
+     * O Admin fica sem grupo e e suspenso (sessoes derrubadas), pois sem grupo ele nao administra nada; um Master
+     * a frente do grupo so perde o grupo. Nunca exclui o ultimo grupo. So o Master.
+     */
+    @Transactional
+    public void excluir(UsuarioAutenticado solicitante, UUID grupoId) {
+        autorizacaoService.exigirMaster(solicitante);
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new AppException(404, "Grupo não encontrado."));
+        if (grupoRepository.count() < 2) {
+            throw new AppException(409, "Não é possível excluir o único grupo.");
+        }
+        long outrasContas = usuarioRepository.countByGrupoId(grupo.getId())
+                - (usuarioRepository.findById(grupo.getAdminId())
+                        .filter(a -> grupo.getId().equals(a.getGrupoId())).isPresent() ? 1 : 0);
+        if (outrasContas > 0 || participacaoRepository.countByIdGrupoId(grupo.getId()) > 0
+                || propriedadeRepository.existsByGrupoId(grupo.getId())) {
+            throw new AppException(409,
+                    "O grupo ainda tem contas ou propriedades. Passe-os para outro Admin antes de excluir.");
+        }
+        Instant agora = clock.instant();
+        Usuario admin = usuarioRepository.findById(grupo.getAdminId()).orElse(null);
+        if (admin != null && grupo.getId().equals(admin.getGrupoId())) {
+            admin.definirGrupo(null);
+            if (admin.getPapel() != Papel.ADMIN_MASTER) {
+                admin.suspender("Grupo " + grupo.getNome() + " excluído.", agora);
+            }
+            admin.derrubarSessoes();
+            usuarioRepository.save(admin);
+            estadoContaCache.invalidar(admin.getId());
+        }
+        auditoriaRepository.save(new AuditoriaConta(solicitante.id(), AcaoAuditoria.EXCLUIR_GRUPO, grupo.getAdminId(),
+                        admin == null ? "" : admin.getEmail(), "grupo " + grupo.getNome(), agora)
+                .comGrupo(grupo.getId()));
+        grupoRepository.delete(grupo);
+    }
+
     /**
      * Gera um novo link de cadastro do grupo: o anterior para de valer na hora (so o hash do codigo atual existe).
      * Master (qualquer grupo) ou Admin do grupo; outro Admin recebe 404, como se o grupo nao existisse.

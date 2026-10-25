@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,6 +39,8 @@ public class GrupoController {
             @NotBlank @Size(max = 255) String adminNome,
             @Email @NotBlank String adminEmail) {}
 
+    public record RenomearRequest(@NotBlank @Size(max = 120) String nome) {}
+
     public record MoverRequest(@NotNull UUID grupoId, UUID grupoOrigemId) {}
 
     public record ReatribuirRequest(@NotNull UUID grupoDestinoId) {}
@@ -55,6 +58,22 @@ public class GrupoController {
         GrupoService.GrupoCriado criado =
                 grupoService.criar(usuario, requisicao.nome(), requisicao.adminNome(), requisicao.adminEmail());
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ApiEnvelope.sucesso(criado));
+    }
+
+    /** Renomeia o grupo. So o Master. */
+    @PatchMapping("/grupos/{id}")
+    public ApiEnvelope<GrupoService.ItemGrupo> renomear(
+            @AuthenticationPrincipal UsuarioAutenticado usuario,
+            @PathVariable UUID id,
+            @Valid @RequestBody RenomearRequest requisicao) {
+        return ApiEnvelope.sucesso(grupoService.renomear(usuario, id, requisicao.nome()));
+    }
+
+    /** Exclui um grupo vazio (so o Admin dele, sem propriedades). So o Master; grupo com dados responde 409. */
+    @DeleteMapping("/grupos/{id}")
+    public ResponseEntity<Void> excluir(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable UUID id) {
+        grupoService.excluir(usuario, id);
+        return ResponseEntity.noContent().build();
     }
 
     /** Novo link de cadastro do grupo; o anterior deixa de valer na hora. O link so e mostrado nesta resposta. */

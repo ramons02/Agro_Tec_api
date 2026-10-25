@@ -14,5 +14,7 @@ public enum AcaoAuditoria {
     MOVER_GRUPO,
     REATRIBUIR_GRUPO,
     REMOVER_DO_GRUPO,
-    NOVO_LINK_GRUPO
+    NOVO_LINK_GRUPO,
+    RENOMEAR_GRUPO,
+    EXCLUIR_GRUPO
 }
