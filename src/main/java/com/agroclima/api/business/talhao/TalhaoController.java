@@ -15,6 +15,7 @@ import com.agroclima.api.core.security.UsuarioAutenticado;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotNull;
 import org.locationtech.jts.geom.Geometry;
 import org.springframework.data.domain.Page;
@@ -65,7 +66,7 @@ public class TalhaoController {
 
     public record TalhaoRequest(
             @NotNull UUID propriedadeId,
-            @NotBlank String nome,
+            @NotBlank @Size(max = 50) String nome,
             @NotNull JsonNode geometria) {}
 
     @PostMapping

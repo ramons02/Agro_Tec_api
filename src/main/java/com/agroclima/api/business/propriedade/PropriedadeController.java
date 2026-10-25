@@ -7,6 +7,7 @@ import com.agroclima.api.core.security.UsuarioAutenticado;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -37,7 +38,8 @@ public class PropriedadeController {
         this.propriedadeService = propriedadeService;
     }
 
-    public record PropriedadeRequest(@NotBlank String nome, String municipio, JsonNode geometria) {}
+    // 100: tamanho da coluna (V3 e V11); acima disso o banco recusava e a API respondia 500.
+    public record PropriedadeRequest(@NotBlank @Size(max = 100) String nome, @Size(max = 100) String municipio, JsonNode geometria) {}
 
     @PostMapping
     public ApiEnvelope<Map<String, Object>> criar(
