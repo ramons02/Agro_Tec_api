@@ -68,9 +68,17 @@ public class AuthController {
 
     @GetMapping("/me")
     public ApiEnvelope<Map<String, Object>> me(@AuthenticationPrincipal UsuarioAutenticado usuario) {
-        return ApiEnvelope.sucesso(Map.of(
-                "id", usuario.id().toString(),
-                "papel", usuario.papel()));
+        GrupoService.Perfil perfil = grupoService.perfilDe(usuario);
+        Map<String, Object> dados = new java.util.LinkedHashMap<>();
+        dados.put("id", perfil.id().toString());
+        dados.put("papel", perfil.papel());
+        dados.put("nome", perfil.nome());
+        dados.put("email", perfil.email());
+        dados.put("status", perfil.status());
+        dados.put("criado_em", perfil.criadoEm().toString());
+        dados.put("grupos", perfil.grupos());
+        dados.put("acesso_total", perfil.acessoTotal());
+        return ApiEnvelope.sucesso(dados);
     }
 
     @PostMapping("/registro")
