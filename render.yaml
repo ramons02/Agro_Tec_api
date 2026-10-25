@@ -21,6 +21,19 @@ services:
         sync: false
       - key: FRONTEND_BASE_URL
         sync: false
+      # E-mail de redefinicao de senha. O Render gratis bloqueia SMTP (portas 25, 465 e 587), entao o envio vai
+      # pela API HTTPS do Brevo. EMAIL_FROM precisa ser um remetente verificado no Brevo.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: AgroClima Pará
+      # Alertas de pulverizacao: token do BotFather e @usuario do bot (sem o @). Sem token, so loga.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
